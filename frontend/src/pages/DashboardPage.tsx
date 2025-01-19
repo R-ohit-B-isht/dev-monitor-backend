@@ -1,126 +1,73 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Activity, GitGraph } from 'lucide-react';
-import { ViewToggle, ViewType } from '../components/ViewToggle';
-import { FilterPanel, Filters } from '../components/FilterPanel';
-import { BoardView } from '../components/views/BoardView';
-import { ListView } from '../components/views/ListView';
-import { TableView } from '../components/views/TableView';
-import { RelationshipGraph } from '../components/views/RelationshipGraph';
-import { Breadcrumb } from '../components/Breadcrumb';
-import { Task } from '../types/Task';
-import { api, Relationship } from '../services/api';
+import { Card } from '../components/ui/card';
+import { Progress } from '../components/ui/progress';
+import { api } from '../services/api';
 
 export function DashboardPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [filters, setFilters] = useState<Filters>({});
-  const [currentView, setCurrentView] = useState<ViewType>('board');
-  const [showRelationships, setShowRelationships] = useState(false);
-  const [relationships, setRelationships] = useState<Relationship[]>([]);
+  const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
+    const fetchMetrics = async () => {
       try {
-        // Convert filters to URL parameters, handling special cases
-        const filterParams: Record<string, string> = {};
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== '') {
-            if (key === 'excludeMeetings') {
-              filterParams[key] = value ? 'true' : 'false';
-            } else {
-              filterParams[key] = value.toString();
-            }
-          }
-        });
-
-        const [tasksResponse, relationshipsResponse] = await Promise.all([
-          fetch(`http://localhost:5000/tasks?${new URLSearchParams(filterParams)}`),
-          fetch('http://localhost:5000/relationships')
-        ]);
-        const tasksData = await tasksResponse.json();
-        const relationshipsData = await relationshipsResponse.json();
-        setTasks(tasksData);
-        setRelationships(relationshipsData);
-      } catch (err) {
-        setError('Failed to load data');
-        console.error(err);
+        const data = await api.getMonitoringMetrics();
+        setMetrics(data);
+      } catch (error) {
+        console.error('Failed to fetch metrics:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [filters]);
+    fetchMetrics();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
+        <p className="text-gray-500">Loading metrics...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
-      <Breadcrumb items={[{ label: 'Dashboard' }]} />
+      <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
       
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-        <div className="flex items-center gap-4">
-          <FilterPanel
-            filters={filters}
-            onChangeFilters={setFilters}
-          />
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/monitoring')}
-            >
-              <Activity className="h-4 w-4 mr-2" />
-              Monitoring
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowRelationships(!showRelationships)}
-            >
-              <GitGraph className="h-4 w-4 mr-2" />
-              {showRelationships ? 'Hide' : 'Show'} Relationships
-            </Button>
-          </div>
-        </div>
-        {!showRelationships && (
-          <ViewToggle
-            currentView={currentView}
-            onViewChange={setCurrentView}
-          />
-        )}
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Focus Time Card */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-2">Focus Time</h3>
+          <Progress value={metrics?.focusTimePercentage || 0} className="mb-2" />
+          <p className="text-sm text-gray-500">
+            {Math.round((metrics?.focusTimeSeconds || 0) / 3600)} hours today
+          </p>
+        </Card>
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <p className="text-gray-500">Loading data...</p>
-        </div>
-      ) : error ? (
-        <div className="flex items-center justify-center h-64">
-          <p className="text-red-500">{error}</p>
-        </div>
-      ) : showRelationships ? (
-        <RelationshipGraph
-          tasks={tasks}
-          relationships={relationships}
-          onTaskClick={(task) => console.log('Task clicked:', task)}
-        />
-      ) : (
-        <>
-          {currentView === 'board' && (
-            <BoardView tasks={tasks} onTaskClick={(task) => console.log('Task clicked:', task)} />
-          )}
-          {currentView === 'list' && (
-            <ListView tasks={tasks} onTaskClick={(task) => console.log('Task clicked:', task)} />
-          )}
-          {currentView === 'table' && (
-            <TableView tasks={tasks} onTaskClick={(task) => console.log('Task clicked:', task)} />
-          )}
-        </>
-      )}
+        {/* Productivity Score Card */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-2">Productivity Score</h3>
+          <div className="text-3xl font-bold mb-2">
+            {Math.round(metrics?.productivityScore || 0)}%
+          </div>
+          <p className="text-sm text-gray-500">
+            Based on focus time and activity
+          </p>
+        </Card>
+
+        {/* Activity Summary Card */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-2">Activity Summary</h3>
+          <div className="text-3xl font-bold mb-2">
+            {metrics?.totalActivities || 0}
+          </div>
+          <p className="text-sm text-gray-500">
+            Total activities tracked today
+          </p>
+        </Card>
+      </div>
     </div>
   );
 }
