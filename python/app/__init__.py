@@ -17,6 +17,7 @@ def create_app(register_blueprints=True):
             from .schedule_service import schedule_bp, start_monitoring_thread
             from .leaderboard_service import leaderboard_bp
             from .report_service import report_bp
+            from .settings_service import settings_bp
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -25,6 +26,7 @@ def create_app(register_blueprints=True):
             app.register_blueprint(schedule_bp)
             app.register_blueprint(leaderboard_bp)
             app.register_blueprint(report_bp)
+            app.register_blueprint(settings_bp)
             
             # Start background monitoring thread
             start_monitoring_thread(app)
