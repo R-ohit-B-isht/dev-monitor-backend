@@ -69,6 +69,7 @@ def create_app(register_blueprints=True):
             from .collaboration_service import collab_bp, init_collections as init_collab_collections
             from .ai_service import ai_bp
             from .notifications_service import notifications_bp, init_collections as init_notifications_collections
+            from .sso_service import sso_bp, init_collections as init_sso_collections
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -86,6 +87,7 @@ def create_app(register_blueprints=True):
             app.register_blueprint(collab_bp)
             app.register_blueprint(ai_bp)
             app.register_blueprint(notifications_bp)
+            app.register_blueprint(sso_bp)
             
             # Initialize collections
             db = get_db()
@@ -93,6 +95,7 @@ def create_app(register_blueprints=True):
             init_security_collections(db)
             init_collab_collections(db)
             init_notifications_collections(db)
+            init_sso_collections(db)
             
             # Start background monitoring thread
             start_monitoring_thread(app)
