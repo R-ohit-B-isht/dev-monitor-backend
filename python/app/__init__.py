@@ -3,7 +3,13 @@ from flask_cors import CORS
 
 def create_app(register_blueprints=True):
     app = Flask(__name__)
-    CORS(app)  # Enable CORS for all routes
+    CORS(app, resources={
+        r"/*": {
+            "origins": ["*"],  # Allow all origins in development
+            "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
     app.config.from_object("app.config.Config")
 
     if register_blueprints:
