@@ -45,6 +45,14 @@ def init_collections(db):
     db.users.create_index([('username', 1)], unique=True)
     db.users.create_index([('email', 1)], unique=True)
     db.users.create_index([('role', 1)])
+    
+    # Achievements collection
+    if 'achievements' not in db.list_collection_names():
+        db.create_collection('achievements')
+    db.achievements.create_index([('engineerId', 1)])
+    db.achievements.create_index([('badge', 1)])
+    db.achievements.create_index([('type', 1)])
+    db.achievements.create_index([('earnedAt', -1)])
 
 def create_app(register_blueprints=True):
     app = Flask(__name__)
@@ -78,6 +86,7 @@ def create_app(register_blueprints=True):
             from .ai_service import ai_bp
             from .notifications_service import notifications_bp, init_collections as init_notifications_collections
             from .sso_service import sso_bp, init_collections as init_sso_collections
+            from .achievements_service import achievements_bp
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -96,6 +105,7 @@ def create_app(register_blueprints=True):
             app.register_blueprint(ai_bp)
             app.register_blueprint(notifications_bp)
             app.register_blueprint(sso_bp)
+            app.register_blueprint(achievements_bp)
             
             # Initialize collections
             db = get_db()
