@@ -1,5 +1,28 @@
-from flask import Flask
+from flask import Flask, current_app
 from flask_cors import CORS
+from pymongo import MongoClient
+
+def get_db():
+    client = MongoClient(current_app.config["MONGODB_URI"])
+    return client[current_app.config["MONGODB_DB"]]
+
+def init_collections(db):
+    """Initialize MongoDB collections and indexes"""
+    # Git events collection
+    if 'git_events' not in db.list_collection_names():
+        db.create_collection('git_events')
+    db.git_events.create_index([('timestamp', -1)])
+    db.git_events.create_index([('taskId', 1)])
+    db.git_events.create_index([('sha', 1)])
+    db.git_events.create_index([('type', 1)])
+
+    # Deploy events collection
+    if 'deploy_events' not in db.list_collection_names():
+        db.create_collection('deploy_events')
+    db.deploy_events.create_index([('timestamp', -1)])
+    db.deploy_events.create_index([('taskId', 1)])
+    db.deploy_events.create_index([('status', 1)])
+    db.deploy_events.create_index([('environment', 1)])
 
 def create_app(register_blueprints=True):
     app = Flask(__name__)
@@ -24,6 +47,9 @@ def create_app(register_blueprints=True):
             from .leaderboard_service import leaderboard_bp
             from .report_service import report_bp
             from .settings_service import settings_bp
+            from .dora_service import dora_bp
+            from .value_stream_service import value_stream_bp
+            from .git_service import git_bp
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -33,6 +59,13 @@ def create_app(register_blueprints=True):
             app.register_blueprint(leaderboard_bp)
             app.register_blueprint(report_bp)
             app.register_blueprint(settings_bp)
+            app.register_blueprint(dora_bp)
+            app.register_blueprint(value_stream_bp)
+            app.register_blueprint(git_bp)
+            
+            # Initialize collections
+            db = get_db()
+            init_collections(db)
             
             # Start background monitoring thread
             start_monitoring_thread(app)
