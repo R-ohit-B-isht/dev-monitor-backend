@@ -107,6 +107,25 @@ def get_value_stream_metrics(engineer_id):
                     'avgCodeToReview': {'$avg': '$codeToReview'},
                     'avgReviewToMerge': {'$avg': '$reviewToMerge'},
                     'avgMergeToDeploy': {'$avg': '$mergeToDeploy'},
+                    'totalTasks': {'$sum': 1},
+                    'inProgressTasks': {
+                        '$sum': {
+                            '$cond': [
+                                {'$in': ['$status', ['In-Progress', 'Review']]},
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    'doneTasks': {
+                        '$sum': {
+                            '$cond': [
+                                {'$eq': ['$status', 'Done']},
+                                1,
+                                0
+                            ]
+                        }
+                    },
                     'tasks': {'$push': '$$ROOT'}
                 }
             }
