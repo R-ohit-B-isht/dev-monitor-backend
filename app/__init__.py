@@ -15,6 +15,13 @@ def init_collections(db):
     db.git_events.create_index([('taskId', 1)])
     db.git_events.create_index([('sha', 1)])
     db.git_events.create_index([('type', 1)])
+    
+    # Code scores collection
+    if 'code_scores' not in db.list_collection_names():
+        db.create_collection('code_scores')
+    db.code_scores.create_index([('timestamp', -1)])
+    db.code_scores.create_index([('final_score', 1)])
+    db.code_scores.create_index([('metadata.repository', 1)])
 
     # Deploy events collection
     if 'deploy_events' not in db.list_collection_names():
@@ -60,6 +67,7 @@ def create_app(register_blueprints=True):
             from .security_service import security_bp, init_collections as init_security_collections
             from .auth_service import auth_bp
             from .collaboration_service import collab_bp, init_collections as init_collab_collections
+            from .ai_service import ai_bp
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -75,6 +83,7 @@ def create_app(register_blueprints=True):
             app.register_blueprint(security_bp)
             app.register_blueprint(auth_bp)
             app.register_blueprint(collab_bp)
+            app.register_blueprint(ai_bp)
             
             # Initialize collections
             db = get_db()
