@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from pymongo import MongoClient
 from bson.objectid import ObjectId
 from datetime import datetime
+from .utils.anonymization import hash_engineer_id, obfuscate_repository_name
 import re
 
 tasks_bp = Blueprint("tasks", __name__)
@@ -87,6 +88,12 @@ def create_task():
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
     
+    # Anonymize sensitive data
+    if "engineerId" in data:
+        data["engineerId"] = hash_engineer_id(data["engineerId"])
+    if "repository" in data:
+        data["repository"] = obfuscate_repository_name(data["repository"])
+    
     # Generate branch name from title
     if "branch" not in data:
         # Convert title to kebab case and clean special characters
@@ -132,7 +139,7 @@ def update_task(task_id):
                 
             if event_type:
                 value_stream_event = {
-                    "engineerId": updates.get("engineerId", current_task.get("engineerId")),
+                    "engineerId": hash_engineer_id(updates.get("engineerId", current_task.get("engineerId"))),
                     "taskId": ObjectId(task_id),
                     "eventType": event_type,
                     "timestamp": datetime.utcnow(),

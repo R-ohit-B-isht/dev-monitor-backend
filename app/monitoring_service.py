@@ -2,8 +2,23 @@ from flask import Blueprint, jsonify, request, current_app
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 import json
+from .utils.anonymization import hash_engineer_id, generate_anonymous_id
+from calendar import monthrange
 
 monitoring_bp = Blueprint("monitoring", __name__)
+
+def get_contribution_color(count):
+    """Return color intensity based on contribution count using GitHub-style thresholds"""
+    if count == 0:
+        return 0  # No contributions
+    elif count <= 4:
+        return 1  # Light
+    elif count <= 8:
+        return 2  # Medium
+    elif count <= 12:
+        return 3  # Dark
+    else:
+        return 4  # Very dark
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
@@ -15,8 +30,9 @@ def get_focus_metrics():
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Get today's monitoring sessions
+    hashed_id = hash_engineer_id('current')
     sessions = list(db.monitoring_sessions.find({
-        'engineerId': 'current',
+        'engineerId': hashed_id,
         'startTime': {'$gte': today},
         'status': {'$in': ['stopped', 'idle']}
     }))
@@ -27,7 +43,7 @@ def get_focus_metrics():
     
     # Get activity counts
     activities = list(db.activity_events.find({
-        'engineerId': 'current',
+        'engineerId': hashed_id,
         'timestamp': {'$gte': today}
     }))
     
@@ -38,7 +54,7 @@ def get_focus_metrics():
     
     # Get new badges earned today
     new_badges = [a['badge'] for a in db.achievements.find({
-        'engineerId': 'current',
+        'engineerId': hashed_id,
         'earnedAt': {'$gte': today}
     })]
     
@@ -120,6 +136,104 @@ def get_achievements():
         achievement['_id'] = str(achievement['_id'])
     
     return jsonify({'achievements': achievements}), 200
+
+@monitoring_bp.route("/monitoring/contributions/<engineer_id>", methods=["GET"])
+def get_contributions(engineer_id):
+    """Get contribution data for the last year"""
+    db = get_db()
+    end_date = datetime.utcnow().replace(hour=23, minute=59, second=59)
+    start_date = (end_date - timedelta(days=364)).replace(hour=0, minute=0, second=0)
+    
+    # For testing: Generate some sample contribution data with realistic patterns
+    test_data = []
+    current_date = start_date
+    
+    # Pre-calculate month boundaries
+    month_days = {}
+    temp_date = start_date
+    while temp_date <= end_date:
+        month_key = temp_date.strftime("%Y-%m")
+        if month_key not in month_days:
+            _, days_in_month = monthrange(temp_date.year, temp_date.month)
+            month_days[month_key] = days_in_month
+        temp_date += timedelta(days=1)
+    
+    while current_date <= end_date:
+        # Generate contribution counts with realistic patterns
+        weekday = current_date.weekday()
+        week_of_year = current_date.isocalendar()[1]
+        
+        # Base contribution pattern
+        if weekday in [5, 6]:  # Weekends
+            base_count = 0
+        else:
+            # More contributions mid-week
+            base_count = 4 + int(6 * (1 - abs(weekday - 2) / 4))
+        
+        # Add weekly pattern variations
+        if week_of_year % 4 == 0:  # High activity weeks
+            count = base_count + 6
+        elif week_of_year % 4 == 1:  # Medium-high activity weeks
+            count = base_count + 3
+        elif week_of_year % 4 == 2:  # Medium-low activity weeks
+            count = max(0, base_count - 1)
+        else:  # Low activity weeks
+            count = max(0, base_count - 3)
+            
+        # Add some randomness
+        import random
+        count = max(0, int(count * (0.8 + random.random() * 0.4)))
+        
+        test_data.append({
+            'date': current_date.strftime("%Y-%m-%d"),
+            'count': count,
+            'intensity': get_contribution_color(count)
+        })
+        current_date += timedelta(days=1)
+    
+    # Group by month for easier rendering
+    months = {}
+    total_contributions = 0
+    
+    # Initialize all months with empty contributions
+    temp_date = start_date
+    while temp_date <= end_date:
+        month_key = temp_date.strftime("%Y-%m")
+        if month_key not in months:
+            days_in_month = month_days[month_key]
+            month_start = temp_date.replace(day=1)
+            
+            # Initialize contributions with proper dates
+            contributions = []
+            for day in range(days_in_month):
+                day_date = month_start + timedelta(days=day)
+                contributions.append({
+                    'date': day_date.strftime("%Y-%m-%d"),
+                    'count': 0,
+                    'intensity': 0
+                })
+            
+            months[month_key] = {
+                'year': temp_date.year,
+                'month': temp_date.month,
+                'name': temp_date.strftime("%B"),
+                'days': days_in_month,
+                'contributions': contributions
+            }
+        temp_date += timedelta(days=1)
+    
+    # Fill in actual contributions
+    for contrib in test_data:
+        date = datetime.strptime(contrib['date'], "%Y-%m-%d")
+        month_key = date.strftime("%Y-%m")
+        day_index = date.day - 1  # Convert to 0-based index
+        months[month_key]['contributions'][day_index] = contrib
+        total_contributions += contrib['count']
+    
+    return jsonify({
+        'months': list(months.values()),
+        'totalContributions': total_contributions
+    }), 200
 
 @monitoring_bp.route("/monitoring/meeting-time/<engineer_id>", methods=["GET"])
 def get_meeting_time(engineer_id):

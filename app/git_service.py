@@ -3,6 +3,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from datetime import datetime
 import json
+from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_commit_message, obfuscate_email
 import requests
 
 git_bp = Blueprint("git", __name__)
@@ -22,9 +23,10 @@ def record_git_event():
         'type': data['type'],  # commit, push, merge
         'sha': data['sha'],
         'taskId': ObjectId(data['taskId']) if data.get('taskId') else None,
-        'author': data.get('author'),
-        'message': data.get('message'),
+        'author': obfuscate_email(data.get('author')),
+        'message': obfuscate_commit_message(data.get('message', '')),
         'branch': data.get('branch'),
+        'repository': obfuscate_repository_name(data.get('repository', '')),
         'metadata': data.get('metadata', {})
     }
     

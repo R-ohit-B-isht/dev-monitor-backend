@@ -4,6 +4,7 @@ from bson.objectid import ObjectId
 from datetime import datetime, timedelta
 import requests
 import json
+from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_email
 
 security_bp = Blueprint("security", __name__)
 
@@ -97,7 +98,7 @@ def sync_security_alerts():
         # Process and store alerts
         for alert in alerts:
             alert_doc = {
-                'repository': repository,
+                'repository': obfuscate_repository_name(repository),
                 'alert_number': alert['number'],
                 'state': alert['state'],
                 'dismissed_reason': alert.get('dismissed_reason'),

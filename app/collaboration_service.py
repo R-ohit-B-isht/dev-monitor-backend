@@ -3,6 +3,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from datetime import datetime, timedelta
 import json
+from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_email
 
 collab_bp = Blueprint("collaboration", __name__)
 
@@ -71,9 +72,9 @@ def record_activity():
             return jsonify({'error': 'Missing required fields'}), 400
             
         activity = {
-            'engineerId': data['engineerId'],
+            'engineerId': hash_engineer_id(data['engineerId']),
             'eventType': data['eventType'],
-            'repository': data['repository'],
+            'repository': obfuscate_repository_name(data['repository']),
             'timestamp': datetime.utcnow(),
             'metadata': data.get('metadata', {}),
             'title': data.get('title'),
