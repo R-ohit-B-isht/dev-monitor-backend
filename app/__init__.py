@@ -24,6 +24,13 @@ def init_collections(db):
     db.deploy_events.create_index([('status', 1)])
     db.deploy_events.create_index([('environment', 1)])
 
+    # Users collection for RBAC
+    if 'users' not in db.list_collection_names():
+        db.create_collection('users')
+    db.users.create_index([('username', 1)], unique=True)
+    db.users.create_index([('email', 1)], unique=True)
+    db.users.create_index([('role', 1)])
+
 def create_app(register_blueprints=True):
     app = Flask(__name__)
     CORS(app, resources={
@@ -50,6 +57,9 @@ def create_app(register_blueprints=True):
             from .dora_service import dora_bp
             from .value_stream_service import value_stream_bp
             from .git_service import git_bp
+            from .security_service import security_bp, init_collections as init_security_collections
+            from .auth_service import auth_bp
+            from .collaboration_service import collab_bp, init_collections as init_collab_collections
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -62,10 +72,15 @@ def create_app(register_blueprints=True):
             app.register_blueprint(dora_bp)
             app.register_blueprint(value_stream_bp)
             app.register_blueprint(git_bp)
+            app.register_blueprint(security_bp)
+            app.register_blueprint(auth_bp)
+            app.register_blueprint(collab_bp)
             
             # Initialize collections
             db = get_db()
             init_collections(db)
+            init_security_collections(db)
+            init_collab_collections(db)
             
             # Start background monitoring thread
             start_monitoring_thread(app)
