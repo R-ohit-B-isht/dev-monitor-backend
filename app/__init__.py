@@ -8,6 +8,14 @@ def get_db():
 
 def init_collections(db):
     """Initialize MongoDB collections and indexes"""
+    # Performance events collection
+    if 'performance_events' not in db.list_collection_names():
+        db.create_collection('performance_events')
+    db.performance_events.create_index([('timestamp', -1)])
+    db.performance_events.create_index([('engineerId', 1)])
+    db.performance_events.create_index([('type', 1)])
+    db.performance_events.create_index([('severity', 1)])
+
     # Git events collection
     if 'git_events' not in db.list_collection_names():
         db.create_collection('git_events')
@@ -97,7 +105,10 @@ def create_app(register_blueprints=True):
             init_notifications_collections(db)
             init_sso_collections(db)
             
-            # Start background monitoring thread
+            # Start background monitoring threads
+            from .schedule_service import start_monitoring_thread
+            from .monitoring_service import start_performance_monitoring
             start_monitoring_thread(app)
+            start_performance_monitoring(app)
 
     return app

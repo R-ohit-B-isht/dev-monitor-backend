@@ -2,11 +2,119 @@ from flask import Blueprint, jsonify, request, current_app
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 import json
+import threading
+import time
 from .utils.anonymization import hash_engineer_id, generate_anonymous_id
 from calendar import monthrange
 from .notifications_service import notify_slack, notify_email
 
 monitoring_bp = Blueprint("monitoring", __name__)
+
+def read_cpu_stats():
+    """Read CPU statistics from /proc/stat"""
+    try:
+        with open('/proc/stat', 'r') as f:
+            cpu_stats = f.readline().split()
+            user = float(cpu_stats[1])
+            nice = float(cpu_stats[2])
+            system = float(cpu_stats[3])
+            idle = float(cpu_stats[4])
+            total = user + nice + system + idle
+            return {
+                'usage_percent': ((total - idle) / total) * 100,
+                'user': user,
+                'system': system,
+                'idle': idle
+            }
+    except Exception as e:
+        print(f"Error reading CPU stats: {str(e)}")
+        return None
+
+def read_memory_stats():
+    """Read memory statistics from /proc/meminfo"""
+    try:
+        memory_stats = {}
+        with open('/proc/meminfo', 'r') as f:
+            for line in f:
+                if ':' in line:
+                    key, value = line.split(':')
+                    value = value.strip()
+                    if 'kB' in value:
+                        value = int(value.replace('kB', '').strip()) * 1024
+                    memory_stats[key.strip()] = value
+        
+        total = int(memory_stats.get('MemTotal', 0))
+        available = int(memory_stats.get('MemAvailable', 0))
+        used = total - available
+        
+        return {
+            'total': total,
+            'available': available,
+            'used': used,
+            'usage_percent': (used / total) * 100 if total > 0 else 0
+        }
+    except Exception as e:
+        print(f"Error reading memory stats: {str(e)}")
+        return None
+
+def monitor_system_performance(app_context):
+    """Background thread to monitor system performance"""
+    with app_context:
+        db = get_db()
+        last_cpu_stats = None
+        
+        while True:
+            try:
+                # Get current stats
+                cpu_stats = read_cpu_stats()
+                memory_stats = read_memory_stats()
+                
+                if cpu_stats and memory_stats:
+                    # Determine severity
+                    severity = 'info'
+                    if cpu_stats['usage_percent'] > 90 or memory_stats['usage_percent'] > 90:
+                        severity = 'critical'
+                    elif cpu_stats['usage_percent'] > 75 or memory_stats['usage_percent'] > 75:
+                        severity = 'warning'
+                    elif cpu_stats['usage_percent'] > 50 or memory_stats['usage_percent'] > 50:
+                        severity = 'moderate'
+                    
+                    # Log event if resource usage is moderate or higher
+                    if severity != 'info':
+                        event = {
+                            'timestamp': datetime.utcnow(),
+                            'type': 'resource_usage',
+                            'severity': severity,
+                            'metrics': {
+                                'cpu': cpu_stats,
+                                'memory': memory_stats
+                            }
+                        }
+                        db.performance_events.insert_one(event)
+                        
+                        # Send notification for critical events
+                        if severity == 'critical':
+                            try:
+                                message = f"🚨 Critical Resource Usage Alert:\nCPU: {cpu_stats['usage_percent']:.1f}%\nMemory: {memory_stats['usage_percent']:.1f}%"
+                                notify_slack('#monitoring-alerts', message)
+                            except Exception as e:
+                                print(f"Failed to send notification: {str(e)}")
+                
+                # Sleep for monitoring interval
+                time.sleep(60)  # Check every minute
+                
+            except Exception as e:
+                print(f"Error in performance monitoring: {str(e)}")
+                time.sleep(60)  # Wait before retrying
+
+def start_performance_monitoring(app):
+    """Start the performance monitoring thread"""
+    monitor_thread = threading.Thread(
+        target=monitor_system_performance,
+        args=(app.app_context(),),
+        daemon=True
+    )
+    monitor_thread.start()
 
 def get_contribution_color(count):
     """Return color intensity based on contribution count using GitHub-style thresholds"""
@@ -24,6 +132,40 @@ def get_contribution_color(count):
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
     return client[current_app.config["MONGODB_DB"]]
+
+@monitoring_bp.route("/monitoring/performance", methods=["GET"])
+def get_performance_metrics():
+    """Get recent performance metrics"""
+    try:
+        db = get_db()
+        days = int(request.args.get('days', '1'))
+        start_date = datetime.utcnow() - timedelta(days=days)
+        
+        # Get recent performance events
+        events = list(db.performance_events.find({
+            'timestamp': {'$gte': start_date}
+        }).sort('timestamp', -1))
+        
+        # Convert ObjectId to string for JSON serialization
+        for event in events:
+            event['_id'] = str(event['_id'])
+            
+        # Calculate summary statistics
+        total_events = len(events)
+        critical_events = sum(1 for e in events if e['severity'] == 'critical')
+        warning_events = sum(1 for e in events if e['severity'] == 'warning')
+        
+        return jsonify({
+            'events': events,
+            'summary': {
+                'total': total_events,
+                'critical': critical_events,
+                'warning': warning_events
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch performance metrics: {str(e)}'}), 500
 
 @monitoring_bp.route("/monitoring/focus-metrics/current", methods=["GET"])
 def get_focus_metrics():
