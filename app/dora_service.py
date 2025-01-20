@@ -31,6 +31,75 @@ def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
     return client[current_app.config["MONGODB_DB"]]
 
+def _calculate_review_metrics(db, engineer_id, start_date, end_date):
+    """Calculate code review related metrics"""
+    try:
+        pipeline = [
+            {
+                '$match': {
+                    'engineerId': engineer_id,
+                    'timestamp': {'$gte': start_date, '$lte': end_date},
+                    'eventType': {'$in': ['review_started', 'review_completed', 'merged']}
+                }
+            },
+            {
+                '$group': {
+                    '_id': '$taskId',
+                    'reviewCount': {
+                        '$sum': {
+                            '$cond': [{'$eq': ['$eventType', 'review_started']}, 1, 0]
+                        }
+                    },
+                    'mergeCount': {
+                        '$sum': {
+                            '$cond': [{'$eq': ['$eventType', 'merged']}, 1, 0]
+                        }
+                    },
+                    'reviewDurations': {
+                        '$push': {
+                            '$cond': [
+                                {'$eq': ['$eventType', 'review_completed']},
+                                '$timestamp',
+                                None
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                '$group': {
+                    '_id': None,
+                    'avgReviewsPerMerge': {
+                        '$avg': {
+                            '$divide': ['$reviewCount', {'$max': ['$mergeCount', 1]}]
+                        }
+                    },
+                    'totalReviews': {'$sum': '$reviewCount'},
+                    'totalMerges': {'$sum': '$mergeCount'}
+                }
+            }
+        ]
+        
+        result = list(db.value_stream_events.aggregate(pipeline))
+        if not result:
+            return {
+                'avgReviewsPerMerge': 0,
+                'totalReviews': 0,
+                'totalMerges': 0
+            }
+            
+        metrics = result[0]
+        metrics.pop('_id')
+        return metrics
+        
+    except Exception as e:
+        print(f"Error calculating review metrics: {str(e)}")
+        return {
+            'avgReviewsPerMerge': 0,
+            'totalReviews': 0,
+            'totalMerges': 0
+        }
+
 @dora_bp.route("/dora/metrics/<engineer_id>", methods=["GET"])
 def get_dora_metrics(engineer_id):
     """Get all DORA metrics for the specified engineer and time period"""
@@ -41,41 +110,57 @@ def get_dora_metrics(engineer_id):
         try:
             end_date = datetime.fromisoformat(request.args.get('end_date', datetime.utcnow().isoformat()))
             days = int(request.args.get('days', '30'))
+            branch = request.args.get('branch')
             start_date = end_date - timedelta(days=days)
         except (ValueError, TypeError) as e:
             return jsonify({'error': f'Invalid date parameters: {str(e)}'}), 400
             
         metrics = {
-            "deploymentFrequency": _calculate_deployment_frequency(db, engineer_id, start_date, end_date),
+            "deploymentFrequency": _calculate_deployment_frequency(db, engineer_id, start_date, end_date, branch),
             "leadTimeForChanges": _calculate_lead_time(db, engineer_id, start_date, end_date),
             "changeFailureRate": _calculate_failure_rate(db, engineer_id, start_date, end_date),
-            "meanTimeToRecover": _calculate_mttr(db, engineer_id, start_date, end_date)
+            "meanTimeToRecover": _calculate_mttr(db, engineer_id, start_date, end_date),
+            "reviewMetrics": _calculate_review_metrics(db, engineer_id, start_date, end_date)
         }
         
         return jsonify(metrics), 200
     except Exception as e:
         return jsonify({'error': f'Failed to fetch DORA metrics: {str(e)}'}), 500
     
-    metrics = {
-        "deploymentFrequency": _calculate_deployment_frequency(db, start_date, end_date),
-        "leadTimeForChanges": _calculate_lead_time(db, start_date, end_date),
-        "changeFailureRate": _calculate_failure_rate(db, start_date, end_date),
-        "meanTimeToRecover": _calculate_mttr(db, start_date, end_date)
-    }
-    
-    return jsonify(metrics), 200
-
-def _calculate_deployment_frequency(db, engineer_id, start_date, end_date):
-    """Calculate how often code is deployed to production"""
+def _calculate_deployment_frequency(db, engineer_id, start_date, end_date, branch=None):
+    """Calculate how often code is deployed to production, optionally filtered by branch"""
     try:
-        deployments = db.deployments.count_documents({
+        query = {
             'engineerId': engineer_id,
             'timestamp': {'$gte': start_date, '$lte': end_date},
             'status': 'success'
-        })
+        }
         
+        if branch:
+            query['gitMetadata.branch'] = branch
+            
+        deployments = db.deployments.count_documents(query)
         days = (end_date - start_date).days
-        return deployments / days if days > 0 else 0
+        
+        # Calculate frequency per day
+        base_frequency = deployments / days if days > 0 else 0
+        
+        # If branch is specified, also get total deployments for comparison
+        if branch:
+            total_deployments = db.deployments.count_documents({
+                'engineerId': engineer_id,
+                'timestamp': {'$gte': start_date, '$lte': end_date},
+                'status': 'success'
+            })
+            branch_percentage = (deployments / total_deployments * 100) if total_deployments > 0 else 0
+            return {
+                'frequency': base_frequency,
+                'branchPercentage': branch_percentage,
+                'totalDeployments': total_deployments,
+                'branchDeployments': deployments
+            }
+            
+        return base_frequency
     except Exception as e:
         print(f"Error calculating deployment frequency: {str(e)}")
         return 0
@@ -111,22 +196,6 @@ def _calculate_lead_time(db, engineer_id, start_date, end_date):
     except Exception as e:
         print(f"Error calculating lead time: {str(e)}")
         return 0
-        {
-            '$project': {
-                'leadTime': {'$subtract': ['$deployedAt', '$commitTime']}
-            }
-        },
-        {
-            '$group': {
-                '_id': None,
-                'averageLeadTime': {'$avg': '$leadTime'}
-            }
-        }
-    ]
-    
-    result = list(db.deployments.aggregate(pipeline))
-    return result[0]['averageLeadTime'] if result else 0
-
 def _calculate_failure_rate(db, engineer_id, start_date, end_date):
     """Calculate percentage of deployments causing failures"""
     try:
@@ -177,22 +246,6 @@ def _calculate_mttr(db, engineer_id, start_date, end_date):
     except Exception as e:
         print(f"Error calculating MTTR: {str(e)}")
         return 0
-        {
-            '$project': {
-                'recoveryTime': {'$subtract': ['$resolvedAt', '$detectedAt']}
-            }
-        },
-        {
-            '$group': {
-                '_id': None,
-                'averageRecoveryTime': {'$avg': '$recoveryTime'}
-            }
-        }
-    ]
-    
-    result = list(db.incidents.aggregate(pipeline))
-    return result[0]['averageRecoveryTime'] if result else 0
-
 @dora_bp.route("/dora/deployments/<engineer_id>", methods=["POST"])
 def record_deployment(engineer_id):
     """Record a new deployment event"""

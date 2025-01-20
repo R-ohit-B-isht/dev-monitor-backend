@@ -3,6 +3,7 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from datetime import datetime
 import json
+import requests
 
 git_bp = Blueprint("git", __name__)
 
@@ -96,3 +97,130 @@ def get_git_metrics(task_id):
     }
     
     return jsonify(metrics), 200
+
+@git_bp.route("/git/traffic/views/<repository>", methods=["GET"])
+def get_repository_views(repository):
+    """Get repository traffic views from GitHub API"""
+    try:
+        headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': f'token {current_app.config["GITHUB_TOKEN"]}'
+        }
+        url = f'https://api.github.com/repos/{repository}/traffic/views'
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        
+        # Store traffic data in MongoDB
+        db = get_db()
+        traffic_data = response.json()
+        traffic_data['repository'] = repository
+        traffic_data['timestamp'] = datetime.utcnow()
+        
+        db.repository_traffic.update_one(
+            {'repository': repository},
+            {'$set': traffic_data},
+            upsert=True
+        )
+        
+        return jsonify(traffic_data), 200
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Failed to fetch repository views: {str(e)}'}), 500
+
+@git_bp.route("/git/traffic/clones/<repository>", methods=["GET"])
+def get_repository_clones(repository):
+    """Get repository clone counts from GitHub API"""
+    try:
+        headers = {
+            'Accept': 'application/vnd.github.v3+json',
+            'Authorization': f'token {current_app.config["GITHUB_TOKEN"]}'
+        }
+        url = f'https://api.github.com/repos/{repository}/traffic/clones'
+        
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        
+        # Store clone data in MongoDB
+        db = get_db()
+        clone_data = response.json()
+        clone_data['repository'] = repository
+        clone_data['timestamp'] = datetime.utcnow()
+        
+        db.repository_clones.update_one(
+            {'repository': repository},
+            {'$set': clone_data},
+            upsert=True
+        )
+        
+        return jsonify(clone_data), 200
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Failed to fetch repository clones: {str(e)}'}), 500
+
+@git_bp.route("/git/traffic/stats/<repository>", methods=["GET"])
+def get_traffic_stats(repository):
+    """Get combined traffic statistics for a repository"""
+    try:
+        db = get_db()
+        
+        # Get latest traffic data
+        views = db.repository_traffic.find_one({'repository': repository})
+        clones = db.repository_clones.find_one({'repository': repository})
+        
+        if not views or not clones:
+            # Fetch fresh data if not available
+            views_response = requests.get(
+                f'https://api.github.com/repos/{repository}/traffic/views',
+                headers={
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Authorization': f'token {current_app.config["GITHUB_TOKEN"]}'
+                }
+            )
+            clones_response = requests.get(
+                f'https://api.github.com/repos/{repository}/traffic/clones',
+                headers={
+                    'Accept': 'application/vnd.github.v3+json',
+                    'Authorization': f'token {current_app.config["GITHUB_TOKEN"]}'
+                }
+            )
+            
+            views_response.raise_for_status()
+            clones_response.raise_for_status()
+            
+            views = views_response.json()
+            clones = clones_response.json()
+            
+            # Store fresh data
+            views['repository'] = repository
+            views['timestamp'] = datetime.utcnow()
+            clones['repository'] = repository
+            clones['timestamp'] = datetime.utcnow()
+            
+            db.repository_traffic.update_one(
+                {'repository': repository},
+                {'$set': views},
+                upsert=True
+            )
+            db.repository_clones.update_one(
+                {'repository': repository},
+                {'$set': clones},
+                upsert=True
+            )
+        
+        # Combine stats
+        stats = {
+            'repository': repository,
+            'views': views.get('count', 0),
+            'unique_views': views.get('uniques', 0),
+            'clones': clones.get('count', 0),
+            'unique_clones': clones.get('uniques', 0),
+            'views_history': views.get('views', []),
+            'clones_history': clones.get('clones', []),
+            'updated_at': max(
+                views.get('timestamp', datetime.min),
+                clones.get('timestamp', datetime.min)
+            )
+        }
+        
+        return jsonify(stats), 200
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'Failed to fetch traffic stats: {str(e)}'}), 500
