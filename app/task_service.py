@@ -87,6 +87,22 @@ def create_task():
     required_fields = ["title", "status", "integration"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
+        
+    # Handle meeting-specific fields
+    if any(keyword in data.get("title", "").lower() or keyword in data.get("description", "").lower() 
+           for keyword in ["meeting", "zoom", "call", "sync", "standup", "review"]):
+        # Add meeting metadata
+        data["isMeeting"] = True
+        data["meetingMetadata"] = {
+            "startTime": data.get("startTime"),
+            "endTime": data.get("endTime"),
+            "duration": data.get("duration", 0),
+            "isRecurring": data.get("isRecurring", False),
+            "recurrencePattern": data.get("recurrencePattern", None),  # daily, weekly, monthly
+            "recurrenceDays": data.get("recurrenceDays", []),  # [0-6] for weekdays
+            "participants": data.get("participants", []),
+            "platform": data.get("platform", "unknown")  # zoom, teams, meet, etc.
+        }
     
     # Anonymize sensitive data
     if "engineerId" in data:

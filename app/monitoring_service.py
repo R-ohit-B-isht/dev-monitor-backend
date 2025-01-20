@@ -394,15 +394,47 @@ def get_meeting_time(engineer_id):
     # Get meeting tasks for today
     meeting_tasks = list(db.tasks.find({
         'engineerId': engineer_id,
-        'createdAt': {'$gte': today},
-        '$or': [
-            {'title': {'$regex': 'meeting|zoom|call|sync|standup|review', '$options': 'i'}},
-            {'description': {'$regex': 'meeting|zoom|call|sync|standup|review', '$options': 'i'}}
-        ]
+        'isMeeting': True,
+        'meetingMetadata.startTime': {'$gte': today.isoformat()}
     }))
     
     # Calculate total meeting time
-    total_meeting_time = sum((task.get('duration', 0) for task in meeting_tasks), 0)
+    total_meeting_time = sum((task.get('meetingMetadata', {}).get('duration', 0) for task in meeting_tasks), 0)
+    
+    # Analyze meeting overlap
+    meetings_timeline = []
+    for task in meeting_tasks:
+        metadata = task.get('meetingMetadata', {})
+        if metadata.get('startTime') and metadata.get('endTime'):
+            meetings_timeline.append({
+                'id': str(task['_id']),
+                'title': task['title'],
+                'start': datetime.fromisoformat(metadata['startTime']),
+                'end': datetime.fromisoformat(metadata['endTime']),
+                'duration': metadata.get('duration', 0),
+                'isRecurring': metadata.get('isRecurring', False),
+                'recurrencePattern': metadata.get('recurrencePattern')
+            })
+    
+    # Sort meetings by start time
+    meetings_timeline.sort(key=lambda x: x['start'])
+    
+    # Calculate overlap
+    overlap_time = 0
+    for i in range(len(meetings_timeline)):
+        for j in range(i + 1, len(meetings_timeline)):
+            meeting1 = meetings_timeline[i]
+            meeting2 = meetings_timeline[j]
+            if meeting1['end'] > meeting2['start']:
+                overlap = min(meeting1['end'], meeting2['end']) - meeting2['start']
+                overlap_time += overlap.total_seconds()
+    
+    # Analyze recurring patterns
+    recurring_meetings = [m for m in meeting_tasks if m.get('meetingMetadata', {}).get('isRecurring', False)]
+    recurring_patterns = {}
+    for meeting in recurring_meetings:
+        pattern = meeting['meetingMetadata']['recurrencePattern']
+        recurring_patterns[pattern] = recurring_patterns.get(pattern, 0) + 1
     
     # Get idle time from monitoring sessions
     idle_time = sum(
@@ -414,8 +446,19 @@ def get_meeting_time(engineer_id):
         })
     )
     
+    # Convert datetime objects to ISO format for JSON serialization
+    for meeting in meetings_timeline:
+        meeting['start'] = meeting['start'].isoformat()
+        meeting['end'] = meeting['end'].isoformat()
+    
     return jsonify({
         'totalMeetingTime': total_meeting_time,
         'meetingCount': len(meeting_tasks),
-        'idleTime': idle_time
+        'idleTime': idle_time,
+        'overlapTime': overlap_time,
+        'meetings': meetings_timeline,
+        'recurringMeetings': {
+            'count': len(recurring_meetings),
+            'patterns': recurring_patterns
+        }
     }), 200
