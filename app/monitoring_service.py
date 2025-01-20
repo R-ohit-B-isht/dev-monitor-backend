@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import json
 from .utils.anonymization import hash_engineer_id, generate_anonymous_id
 from calendar import monthrange
+from .notifications_service import notify_slack, notify_email
 
 monitoring_bp = Blueprint("monitoring", __name__)
 
@@ -57,6 +58,14 @@ def get_focus_metrics():
         'engineerId': hashed_id,
         'earnedAt': {'$gte': today}
     })]
+    
+    # Send notifications for new achievements
+    for badge in new_badges:
+        try:
+            notify_slack('#dev-productivity', f"🏆 Achievement Unlocked: {badge}")
+            notify_email('admin@example.com', 'New Achievement Unlocked', f"You've earned the {badge} badge!")
+        except Exception as e:
+            print(f"Failed to send achievement notification: {str(e)}")
     
     return jsonify({
         'focusTimeSeconds': total_focus_time,
