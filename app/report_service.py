@@ -1,10 +1,41 @@
-from flask import Blueprint, jsonify, request, send_file
+from flask import Blueprint, jsonify, request, send_file, current_app
 from datetime import datetime, timedelta
 import pandas as pd
 import io
+import json
 from .monitoring_service import get_db
 
 report_bp = Blueprint("report", __name__)
+
+def format_duration(seconds):
+    """Format duration in seconds to human readable string"""
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    return f"{hours}h {minutes}m"
+
+def format_percentage(value):
+    """Format float as percentage string"""
+    return f"{value:.1f}%"
+
+def get_report_data(db, engineer_id, start_date, end_date, report_type="performance"):
+    """Get report data based on type"""
+    if report_type == "performance":
+        return list(db.monitoring_sessions.find({
+            "engineerId": engineer_id,
+            "startTime": {"$gte": start_date, "$lt": end_date}
+        }).sort("startTime", -1))
+    elif report_type == "security":
+        return list(db.security_alerts.find({
+            "engineerId": engineer_id,
+            "created_at": {"$gte": start_date, "$lt": end_date}
+        }).sort("created_at", -1))
+    elif report_type == "collaboration":
+        return list(db.activity_feed.find({
+            "engineerId": engineer_id,
+            "timestamp": {"$gte": start_date, "$lt": end_date}
+        }).sort("timestamp", -1))
+    else:
+        raise ValueError(f"Unsupported report type: {report_type}")
 
 def generate_csv_report(data, filename="report.csv"):
     """Convert data to CSV format"""
@@ -144,7 +175,54 @@ def get_report_summary():
             {"id": "idleTime", "name": "Idle Time", "type": "duration"},
             {"id": "productivityScore", "name": "Productivity Score", "type": "percentage"},
             {"id": "meetingTime", "name": "Meeting Time", "type": "duration"},
-            {"id": "achievements", "name": "Achievements", "type": "list"}
+            {"id": "achievements", "name": "Achievements", "type": "list"},
+            {"id": "securityAlerts", "name": "Security Alerts", "type": "count"},
+            {"id": "codeReviews", "name": "Code Reviews", "type": "count"},
+            {"id": "deployments", "name": "Deployments", "type": "count"}
         ],
-        "formats": ["json", "csv"]
+        "formats": ["json", "csv", "pdf", "excel"],
+        "reportTypes": ["performance", "security", "collaboration"]
     }), 200
+
+@report_bp.route("/report/export/<engineer_id>", methods=["GET"])
+def export_report(engineer_id):
+    """Export engineer data in specified format"""
+    try:
+        format_type = request.args.get('format', 'pdf')
+        days = int(request.args.get('days', '30'))
+        report_type = request.args.get('type', 'performance')
+        
+        if format_type not in ['pdf', 'excel', 'csv', 'json']:
+            return jsonify({'error': 'Unsupported format type'}), 400
+            
+        # Get data based on report type
+        db = get_db()
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        try:
+            data = get_report_data(db, engineer_id, start_date, end_date, report_type)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+            
+        # Generate report in requested format
+        if format_type == 'pdf':
+            return jsonify({'error': 'PDF export not implemented yet'}), 501
+        elif format_type == 'excel':
+            return jsonify({'error': 'Excel export not implemented yet'}), 501
+        elif format_type == 'csv':
+            csv_data = generate_csv_report(data)
+            output = io.StringIO()
+            output.write(csv_data)
+            output.seek(0)
+            return send_file(
+                output,
+                mimetype="text/csv",
+                as_attachment=True,
+                download_name=f"{report_type}_report_{start_date.date()}_{end_date.date()}.csv"
+            )
+        else:  # json
+            return jsonify(data), 200
+            
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate report: {str(e)}'}), 500
