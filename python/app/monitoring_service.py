@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from pymongo import MongoClient
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from bson.objectid import ObjectId
 import json
 import threading
 import time
@@ -82,7 +83,7 @@ def monitor_system_performance(app_context):
                     # Log event if resource usage is moderate or higher
                     if severity != 'info':
                         event = {
-                            'timestamp': datetime.utcnow(),
+                            'timestamp': datetime.now(timezone.utc),
                             'type': 'resource_usage',
                             'severity': severity,
                             'metrics': {
@@ -170,7 +171,7 @@ def get_performance_metrics():
 @monitoring_bp.route("/monitoring/focus-metrics/current", methods=["GET"])
 def get_focus_metrics():
     db = get_db()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Get today's monitoring sessions
     hashed_id = hash_engineer_id('current')
@@ -226,7 +227,7 @@ def start_time_tracking():
     
     session = {
         'engineerId': data['engineerId'],
-        'startTime': datetime.utcnow(),
+        'startTime': datetime.now(timezone.utc),
         'status': 'running',
         'focusTime': 0,
         'idleTime': 0
@@ -240,20 +241,30 @@ def stop_time_tracking():
     db = get_db()
     data = request.json
     
-    session = db.monitoring_sessions.find_one_and_update(
-        {'_id': data['sessionId'], 'status': 'running'},
-        {
-            '$set': {
-                'status': 'stopped',
-                'endTime': datetime.utcnow()
+    try:
+        session_id = ObjectId(data['sessionId'])
+        current_time = datetime.now(timezone.utc)
+        session = db.monitoring_sessions.find_one_and_update(
+            {'_id': session_id, 'status': 'running'},
+            {
+                '$set': {
+                    'status': 'stopped',
+                    'endTime': current_time
+                }
             }
-        }
-    )
+        )
+    except Exception as e:
+        return jsonify({'error': f'Invalid session ID: {str(e)}'}), 400
     
     if not session:
         return jsonify({'error': 'Session not found or already stopped'}), 404
         
-    duration = (datetime.utcnow() - session['startTime']).total_seconds()
+    # Ensure startTime has UTC timezone
+    start_time = session['startTime']
+    if not start_time.tzinfo:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+        
+    duration = (current_time - start_time).total_seconds()
     return jsonify({'duration': duration}), 200
 
 @monitoring_bp.route("/monitoring/activity", methods=["POST"])
@@ -264,8 +275,9 @@ def record_activity():
     event = {
         'engineerId': data['engineerId'],
         'sessionId': data['sessionId'],
-        'timestamp': datetime.utcnow(),
+        'timestamp': datetime.now(timezone.utc),
         'eventType': data['eventType'],
+        'appName': data.get('appName', 'unknown'),
         'metadata': data.get('metadata', {})
     }
     
@@ -275,7 +287,7 @@ def record_activity():
 @monitoring_bp.route("/monitoring/achievements/current", methods=["GET"])
 def get_achievements():
     db = get_db()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     
     achievements = list(db.achievements.find({
         'engineerId': 'current',
@@ -292,7 +304,7 @@ def get_achievements():
 def get_contributions(engineer_id):
     """Get contribution data for the last year"""
     db = get_db()
-    end_date = datetime.utcnow().replace(hour=23, minute=59, second=59)
+    end_date = datetime.now(timezone.utc).replace(hour=23, minute=59, second=59)
     start_date = (end_date - timedelta(days=364)).replace(hour=0, minute=0, second=0)
     
     # For testing: Generate some sample contribution data with realistic patterns
@@ -386,10 +398,68 @@ def get_contributions(engineer_id):
         'totalContributions': total_contributions
     }), 200
 
+@monitoring_bp.route("/monitoring/app-focus/<engineer_id>", methods=["GET"])
+def get_app_focus(engineer_id):
+    """Get app-specific focus time breakdown"""
+    try:
+        db = get_db()
+        today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Get all activity events for today
+        events = list(db.activity_events.find({
+            'engineerId': hash_engineer_id(engineer_id),
+            'timestamp': {'$gte': today}
+        }))
+        
+        # Group events by app and calculate focus time
+        app_focus = {}
+        for event in events:
+            app_name = event.get('appName', 'unknown')
+            if app_name not in app_focus:
+                app_focus[app_name] = {
+                    'focusTime': 0,
+                    'eventCount': 0,
+                    'lastEventTime': None
+                }
+            
+            # Update focus time based on time between events
+            if app_focus[app_name]['lastEventTime']:
+                time_diff = (event['timestamp'] - app_focus[app_name]['lastEventTime']).total_seconds()
+                # Only count if events are within 5 minutes of each other
+                if time_diff <= 300:
+                    app_focus[app_name]['focusTime'] += time_diff
+            
+            app_focus[app_name]['eventCount'] += 1
+            app_focus[app_name]['lastEventTime'] = event['timestamp']
+        
+        # Format response
+        focus_data = []
+        total_focus_time = sum(app['focusTime'] for app in app_focus.values())
+        
+        for app_name, data in app_focus.items():
+            focus_data.append({
+                'appName': app_name,
+                'focusTime': data['focusTime'],
+                'eventCount': data['eventCount'],
+                'percentage': (data['focusTime'] / total_focus_time * 100) if total_focus_time > 0 else 0
+            })
+        
+        # Sort by focus time descending
+        focus_data.sort(key=lambda x: x['focusTime'], reverse=True)
+        
+        return jsonify({
+            'apps': focus_data,
+            'totalFocusTime': total_focus_time,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to fetch app focus metrics: {str(e)}'}), 500
+
 @monitoring_bp.route("/monitoring/meeting-time/<engineer_id>", methods=["GET"])
 def get_meeting_time(engineer_id):
     db = get_db()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Get meeting tasks for today
     meeting_tasks = list(db.tasks.find({

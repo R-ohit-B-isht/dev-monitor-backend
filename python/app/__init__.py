@@ -88,6 +88,7 @@ def create_app(register_blueprints=True):
             from .notifications_service import notifications_bp, init_collections as init_notifications_collections
             from .sso_service import sso_bp, init_collections as init_sso_collections
             from .achievements_service import achievements_bp
+            from .organization_service import org_bp
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -108,6 +109,7 @@ def create_app(register_blueprints=True):
             app.register_blueprint(sso_bp)
             app.register_blueprint(achievements_bp)
             app.register_blueprint(websocket_bp)
+            app.register_blueprint(org_bp)
             
             # Initialize WebSocket
             socketio = init_websocket(app)

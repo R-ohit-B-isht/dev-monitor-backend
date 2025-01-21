@@ -1,9 +1,10 @@
 import os
 
 class Config:
-    MONGODB_URI = "mongodb://localhost:27017"
-    MONGODB_DB = "devin_tasks"
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev')
+    MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017')
+    MONGODB_DB = os.environ.get('MONGODB_DB', 'devin_tasks')
+    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     
     # Okta SSO Configuration
     OKTA_CLIENT_ID = os.environ.get('OKTA_CLIENT_ID')
