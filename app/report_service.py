@@ -45,6 +45,87 @@ def generate_csv_report(data, filename="report.csv"):
     output.seek(0)
     return output.getvalue()
 
+def generate_excel_report(data, filename="report.xlsx"):
+    """Convert data to Excel format"""
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Report')
+        
+        # Auto-adjust columns' width
+        worksheet = writer.sheets['Report']
+        for idx, col in enumerate(df.columns):
+            max_length = max(
+                df[col].astype(str).apply(len).max(),
+                len(str(col))
+            ) + 2
+            worksheet.column_dimensions[chr(65 + idx)].width = max_length
+    
+    output.seek(0)
+    return output
+
+def generate_pdf_report(data, title="Performance Report"):
+    """Generate PDF report with data visualization"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    
+    # Create PDF buffer
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    
+    # Create custom style for title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        spaceAfter=30
+    )
+    
+    # Convert data to DataFrame for easier handling
+    df = pd.DataFrame(data)
+    
+    # Build PDF content
+    content = []
+    
+    # Add title
+    content.append(Paragraph(title, title_style))
+    content.append(Spacer(1, 20))
+    
+    # Add table
+    if len(df) > 0:
+        # Convert DataFrame values to list of lists
+        table_data = []
+        table_data.append(df.columns.tolist())  # Add headers
+        for _, row in df.iterrows():
+            table_data.append(row.tolist())  # Add each row
+    else:
+        table_data = [['No data available']]
+    
+    table = Table(table_data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 12),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+    ]))
+    content.append(table)
+    
+    # Build PDF
+    doc.build(content)
+    buffer.seek(0)
+    return buffer
+
 @report_bp.route("/monitoring/report", methods=["GET"])
 def generate_report():
     db = get_db()
@@ -207,9 +288,21 @@ def export_report(engineer_id):
             
         # Generate report in requested format
         if format_type == 'pdf':
-            return jsonify({'error': 'PDF export not implemented yet'}), 501
+            pdf_buffer = generate_pdf_report(data, f"{report_type.title()} Report")
+            return send_file(
+                pdf_buffer,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=f"{report_type}_report_{start_date.date()}_{end_date.date()}.pdf"
+            )
         elif format_type == 'excel':
-            return jsonify({'error': 'Excel export not implemented yet'}), 501
+            excel_buffer = generate_excel_report(data)
+            return send_file(
+                excel_buffer,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=f"{report_type}_report_{start_date.date()}_{end_date.date()}.xlsx"
+            )
         elif format_type == 'csv':
             csv_data = generate_csv_report(data)
             output = io.StringIO()
