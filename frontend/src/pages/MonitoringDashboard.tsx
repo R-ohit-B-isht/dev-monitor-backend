@@ -12,12 +12,14 @@ import { Progress } from '../components/ui/progress';
 import { Button } from '../components/ui/button';
 import { Clock, Award, Activity, Brain, FileDown } from 'lucide-react';
 import { Breadcrumb } from '../components/Breadcrumb';
-import { api, MonitoringMetrics, Achievement } from '../services/api';
+import { api, MonitoringMetrics, Achievement, AppFocusMetrics } from '../services/api';
 import { MeetingTimeCard } from '../components/MeetingTimeCard';
+import { FocusBreakdownChart } from '../components/FocusBreakdownChart';
 import { ReportPanel } from '../components/ReportPanel';
 
 export function MonitoringDashboard() {
   const [metrics, setMetrics] = useState<MonitoringMetrics | null>(null);
+  const [appFocusMetrics, setAppFocusMetrics] = useState<AppFocusMetrics | null>(null);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,12 +27,14 @@ export function MonitoringDashboard() {
 
   const fetchData = async () => {
     try {
-      const [metricsData, achievementsData] = await Promise.all([
+      const [metricsData, achievementsData, appFocusData] = await Promise.all([
         api.getMonitoringMetrics(),
-        api.getAchievements()
+        api.getAchievements(),
+        api.getAppFocusMetrics()
       ]);
       setMetrics(metricsData);
       setAchievements(achievementsData.achievements);
+      setAppFocusMetrics(appFocusData);
     } catch (err) {
       setError('Failed to load monitoring data');
       console.error(err);
@@ -72,6 +76,9 @@ export function MonitoringDashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        {appFocusMetrics && (
+          <FocusBreakdownChart data={appFocusMetrics.apps} />
+        )}
         {/* Meeting Time */}
         <MeetingTimeCard
           engineerId="current"
@@ -178,7 +185,7 @@ export function MonitoringDashboard() {
                   </div>
                 </div>
                 <Badge variant="secondary" className="whitespace-nowrap">
-                  Score: {Math.round(achievement.metadata.productivityScore)}%
+                  Score: {achievement.metadata.productivityScore ? Math.round(achievement.metadata.productivityScore) : 0}%
                 </Badge>
               </div>
             ))}

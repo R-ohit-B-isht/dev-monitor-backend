@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request, current_app
 from pymongo import MongoClient
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
+from .utils.anonymization import hash_engineer_id
 
 ai_bp = Blueprint("ai", __name__)
 
@@ -119,3 +120,73 @@ def get_review_score():
         
     except Exception as e:
         return jsonify({'error': f'Failed to calculate review score: {str(e)}'}), 500
+
+def suggest_next_tasks(activity_log):
+    """Generate task suggestions based on activity history"""
+    suggestions = []
+    
+    # Analyze activity patterns
+    commit_count = sum(1 for activity in activity_log if activity.get('type') == 'commit')
+    review_count = sum(1 for activity in activity_log if activity.get('type') == 'review')
+    comment_count = sum(1 for activity in activity_log if activity.get('type') == 'comment')
+    
+    # Generate suggestions based on activity patterns
+    if commit_count > 10 and review_count < 2:
+        suggestions.append("Consider reviewing peers' code to maintain code quality")
+    
+    if review_count > 5 and commit_count < 2:
+        suggestions.append("Focus on implementing new features or fixing bugs")
+    
+    if comment_count < 3 and (commit_count > 0 or review_count > 0):
+        suggestions.append("Add more detailed comments to improve code documentation")
+    
+    # Add general productivity suggestions
+    suggestions.extend([
+        "Break down large tasks into smaller, manageable chunks",
+        "Update task status regularly to maintain transparency",
+        "Schedule regular code reviews to catch issues early"
+    ])
+    
+    return {
+        'suggestions': suggestions,
+        'metrics': {
+            'commit_count': commit_count,
+            'review_count': review_count,
+            'comment_count': comment_count
+        },
+        'timestamp': datetime.utcnow().isoformat()
+    }
+
+@ai_bp.route("/ai/suggestions/<engineer_id>", methods=["GET"])
+def get_suggestions(engineer_id):
+    """Get AI-generated task suggestions"""
+    try:
+        db = get_db()
+        days = int(request.args.get('days', '7'))
+        
+        # Get recent activity
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        activity_log = list(db.activity_feed.find({
+            'engineerId': hash_engineer_id(engineer_id),
+            'timestamp': {'$gte': start_date, '$lt': end_date}
+        }).sort('timestamp', -1))
+        
+        suggestions = suggest_next_tasks(activity_log)
+        
+        # Store suggestions
+        db.ai_suggestions.insert_one({
+            'engineerId': hash_engineer_id(engineer_id),
+            'suggestions': suggestions['suggestions'],
+            'metrics': suggestions['metrics'],
+            'timestamp': datetime.utcnow(),
+            'activityPeriod': {
+                'start': start_date,
+                'end': end_date
+            }
+        })
+        
+        return jsonify(suggestions), 200
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate suggestions: {str(e)}'}), 500

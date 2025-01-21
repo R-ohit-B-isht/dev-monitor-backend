@@ -175,6 +175,14 @@ const getCollaborationStats = async (params?: {
 };
 
 export const api = {
+  getOrganizationMetrics: async (days: number = 30): Promise<OrganizationMetrics> => {
+    const response = await axios.get(`${API_BASE_URL}/org/aggregations?days=${days}`);
+    return response.data;
+  },
+  getAppFocusMetrics: async (engineerId: string = 'current'): Promise<AppFocusMetrics> => {
+    const response = await axios.get(`${API_BASE_URL}/monitoring/app-focus/${engineerId}`);
+    return response.data;
+  },
   // Collaboration endpoints
   getActivityFeed,
   getCollaborationStats,
@@ -476,6 +484,47 @@ export const getTrafficStats = async (repository: string): Promise<TrafficData> 
   return response.data;
 };
 
+// Removed duplicate getOrganizationMetrics definition
+
+export interface OrganizationMetrics {
+  metrics: Array<{
+    repository: string;
+    activity: {
+      commits: number;
+      pull_requests: number;
+      reviews: number;
+      comments: number;
+    };
+    performance: {
+      avg_review_time: number;
+      merge_success_rate: number;
+      deployment_frequency: number;
+    };
+    security: {
+      open_alerts: number;
+      fixed_alerts: number;
+      high_severity: number;
+    };
+    collaboration: {
+      unique_contributors: number;
+      review_coverage: number;
+      comment_ratio: number;
+    };
+  }>;
+  totals: {
+    total_repositories: number;
+    total_activity: number;
+    total_contributors: number;
+    total_security_alerts: number;
+    avg_deployment_frequency: number;
+    timeframe: {
+      start: string;
+      end: string;
+      days: number;
+    };
+  };
+}
+
 export interface Activity {
   _id: string;
   engineerId: string;
@@ -489,6 +538,17 @@ export interface Activity {
   commentCount?: number;
   additions?: number;
   deletions?: number;
+}
+
+export interface AppFocusMetrics {
+  apps: Array<{
+    appName: string;
+    focusTime: number;
+    eventCount: number;
+    percentage: number;
+  }>;
+  totalFocusTime: number;
+  timestamp: string;
 }
 
 export interface CollaborationStats {

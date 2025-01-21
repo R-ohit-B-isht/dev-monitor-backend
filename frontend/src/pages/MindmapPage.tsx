@@ -153,10 +153,29 @@ export function MindmapPage() {
       ) : (
         <div className="mt-6">
           <RelationshipGraph
-            tasks={nodes}
-            relationships={edges}
+            tasks={nodes.map(node => ({
+              _id: node._id,
+              title: node.label,
+              status: 'In-Progress',
+              integration: 'github',
+              createdAt: node.createdAt,
+              updatedAt: node.updatedAt,
+              description: '',
+              assignee: '',
+              priority: 'medium',
+              dueDate: null,
+              tags: []
+            }))}
+            relationships={edges.map(edge => ({
+              _id: edge._id,
+              sourceTaskId: edge.sourceId,
+              targetTaskId: edge.targetId,
+              type: 'relates-to',
+              createdAt: edge.createdAt,
+              updatedAt: edge.updatedAt
+            }))}
             onTaskClick={(node) => handleNodeClick(node._id)}
-            selectedTaskId={selectedNode}
+
           />
         </div>
       )}

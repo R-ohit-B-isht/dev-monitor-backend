@@ -1,4 +1,4 @@
-import { io, Socket } from 'socket.io-client';
+import io from 'socket.io-client';
 
 export interface MindMapNode {
   _id: string;
@@ -26,7 +26,7 @@ export interface MindMapState {
 }
 
 class WebSocketService {
-  private socket: Socket | null = null;
+  private socket: ReturnType<typeof io> | null = null;
   private mindmapId: string | null = null;
   private userId: string | null = null;
 
@@ -40,7 +40,7 @@ class WebSocketService {
           resolve();
         });
 
-        this.socket.on('connect_error', (error) => {
+        this.socket.on('connect_error', (error: Error) => {
           console.error('WebSocket connection error:', error);
           reject(error);
         });
