@@ -1,6 +1,7 @@
 from flask import Flask, current_app
 from flask_cors import CORS
 from pymongo import MongoClient
+from .websocket_service import websocket_bp, init_websocket
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
@@ -106,6 +107,10 @@ def create_app(register_blueprints=True):
             app.register_blueprint(notifications_bp)
             app.register_blueprint(sso_bp)
             app.register_blueprint(achievements_bp)
+            app.register_blueprint(websocket_bp)
+            
+            # Initialize WebSocket
+            socketio = init_websocket(app)
             
             # Initialize collections
             db = get_db()
