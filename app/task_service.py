@@ -128,34 +128,66 @@ def update_task(task_id):
     db = get_db()
     updates = request.json
     
-    try:
-        # Get current task state
-        current_task = db.tasks.find_one({"_id": ObjectId(task_id)})
-        if not current_task:
-            return jsonify({"error": "Task not found"}), 404
+    # Get current task state
+    current_task = db.tasks.find_one({"_id": ObjectId(task_id)})
+    if not current_task:
+        return jsonify({"error": "Task not found"}), 404
+        
+    # Add updated timestamp
+    updates["updatedAt"] = datetime.utcnow()
+    
+    # If updating status to Done, check if this task is blocked by any tasks
+    if updates.get("status") == "Done":
+        print(f"Checking if task {task_id} can be marked as Done")
+        print(f"Current task status: {current_task.get('status')}")
+        
+        # Check if this task is being blocked by others (where this task is the target)
+        blocking_relationships = list(db.relationships.find({
+            "targetTaskId": str(task_id),  # This task is being blocked
+            "type": "blocks"  # Only check for direct blocking relationships
+        }))
+        print(f"Found {len(blocking_relationships)} blocking relationships")
+        
+        # Only check blocking tasks if this task is being blocked
+        for rel in blocking_relationships:
+            print(f"Checking relationship: {rel}")
+            blocking_task = db.tasks.find_one({"_id": ObjectId(rel["sourceTaskId"])})
+            print(f"Found blocking task: {blocking_task}")
             
-        # Add updated timestamp
-        updates["updatedAt"] = datetime.utcnow()
-        
-        # Update task
-        result = db.tasks.update_one(
-            {"_id": ObjectId(task_id)},
-            {"$set": updates}
-        )
-        
-        # Record value stream event if status changed
-        if "status" in updates and updates["status"] != current_task.get("status"):
-            event_type = None
-            if updates["status"] == "In-Progress":
-                event_type = "code_started"
-            elif updates["status"] == "Review":
-                event_type = "review_started"
-            elif updates["status"] == "Done":
-                event_type = "code_completed"
-                
-            if event_type:
+            if blocking_task and blocking_task["status"] != "Done":
+                print(f"Blocking task {blocking_task['title']} is not Done")
+                return jsonify({
+                    "error": f"Cannot mark as Done: blocked by task '{blocking_task['title']}' which is not Done"
+                }), 400
+        print("No blocking tasks found or all blocking tasks are Done, allowing update")
+    
+    # Update task
+    result = db.tasks.update_one(
+        {"_id": ObjectId(task_id)},
+        {"$set": updates}
+    )
+    
+    if result.modified_count == 0:
+        return jsonify({"error": "Task not found or no changes made"}), 404
+    
+    # Record value stream event if status changed
+    if "status" in updates and updates["status"] != current_task.get("status"):
+        event_type = None
+        if updates["status"] == "In-Progress":
+            event_type = "code_started"
+        elif updates["status"] == "Review":
+            event_type = "review_started"
+        elif updates["status"] == "Done":
+            event_type = "code_completed"
+            
+        if event_type:
+            # Get engineerId from updates or current task
+            engineer_id = updates.get("engineerId") or current_task.get("engineerId")
+            
+            # Only create value stream event if we have an engineerId
+            if engineer_id:
                 value_stream_event = {
-                    "engineerId": hash_engineer_id(updates.get("engineerId", current_task.get("engineerId"))),
+                    "engineerId": hash_engineer_id(engineer_id),
                     "taskId": ObjectId(task_id),
                     "eventType": event_type,
                     "timestamp": datetime.utcnow(),
@@ -166,11 +198,9 @@ def update_task(task_id):
                     "sessionId": updates.get("sessionId")
                 }
                 db.value_stream_events.insert_one(value_stream_event)
-        
-        return jsonify({
-            "message": "Task updated",
-            "taskId": str(task_id),
-            "updatedAt": updates["updatedAt"].isoformat()
-        }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    
+    return jsonify({
+        "message": "Task updated",
+        "taskId": str(task_id),
+        "updatedAt": updates["updatedAt"].isoformat()
+    }), 200

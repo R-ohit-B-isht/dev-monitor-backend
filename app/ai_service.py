@@ -12,6 +12,9 @@ def get_db():
 
 def analyze_code_complexity(code_diff):
     """Basic code complexity analysis"""
+    if not code_diff:
+        return 100  # Empty code has perfect complexity score
+        
     # Count nested control structures
     control_keywords = ['if', 'for', 'while', 'try', 'with']
     nesting_level = 0
@@ -26,7 +29,7 @@ def analyze_code_complexity(code_diff):
         
         # Check for control structures
         stripped = line.strip()
-        if any(keyword in stripped for keyword in control_keywords):
+        if any(f"{keyword} " in f"{stripped} " for keyword in control_keywords):
             nesting_level += 1
         
         max_nesting = max(max_nesting, nesting_level)
@@ -37,42 +40,158 @@ def analyze_code_complexity(code_diff):
 
 def analyze_code_readability(code_diff):
     """Basic code readability analysis"""
-    lines = code_diff.split('\n')
+    if not code_diff:
+        return 0  # Empty code has zero readability score
+        
+    # Handle both string and list input
+    if isinstance(code_diff, list):
+        lines = [line for line in code_diff if line.strip()]
+    else:
+        lines = [line for line in code_diff.split('\n') if line.strip()]
+        
+    if not lines:
+        return 0
+        
     total_score = 0.0
     metrics = {
         'line_length': 0.0,
-        'comment_ratio': 0.0,
-        'naming_convention': 0.0
+        'comment_quality': 0.0,
+        'naming_convention': 0.0,
+        'code_structure': 0.0
     }
     
-    comment_count = 0
+    comment_lines = []
     total_lines = len(lines)
+    var_names = []
+    func_names = []
+    indentation_consistent = True
+    prev_indent = None
     
-    for line in lines:
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+            
         # Line length score (penalize lines > 80 chars)
         line_length = len(line)
         metrics['line_length'] += float(min(100, max(0, 100 - (line_length - 80))))
         
-        # Comment ratio
-        if '#' in line or '"""' in line or "'''" in line:
-            comment_count += 1
+        # Check indentation consistency
+        if stripped:
+            indent = len(line) - len(line.lstrip())
+            if prev_indent is not None and indent % 4 != 0:
+                indentation_consistent = False
+            prev_indent = indent
+        
+        # Collect comments
+        if (stripped.startswith('#') or 
+            stripped.startswith('"""') or 
+            stripped.startswith("'''") or 
+            '# ' in line):
+            comment_lines.append(stripped)
             
-        # Variable naming conventions (snake_case for Python)
-        if '=' in line:
+        # Collect variable and function names
+        if '=' in line and not stripped.startswith('#'):
             var_name = line.split('=')[0].strip()
-            if re.match(r'^[a-z][a-z0-9_]*$', var_name):
-                metrics['naming_convention'] += 100.0
+            var_names.append(var_name)
+            
+        if stripped.startswith('def '):
+            func_name = stripped[4:].split('(')[0].strip()
+            func_names.append(func_name)
                 
-    # Calculate final scores
-    metrics['line_length'] = metrics['line_length'] / total_lines if total_lines > 0 else 0.0
-    metrics['comment_ratio'] = (comment_count / total_lines * 100.0) if total_lines > 0 else 0.0
-    metrics['naming_convention'] = metrics['naming_convention'] / total_lines if total_lines > 0 else 0.0
+    # Calculate comment quality score
+    comment_score = 0
+    meaningful_comments = 0
+    function_has_docstring = False
     
-    # Weight the metrics
+    for comment in comment_lines:
+        # Remove comment markers
+        text = comment.lstrip('#').lstrip('"').lstrip("'").strip()
+        
+        # Check for function docstring
+        if any(line.strip().startswith('def ') for line in lines):
+            if '"""' in comment or "'''" in comment:
+                function_has_docstring = True
+                comment_score += 30  # Bonus for having docstring
+        
+        # Check if comment is meaningful
+        if len(text.split()) > 2 and not text.startswith('TODO'):
+            meaningful_comments += 1
+            # Bonus for descriptive comments
+            if len(text) > 20:
+                comment_score += 25
+            elif len(text) > 10:
+                comment_score += 15
+                
+    # Bonus for good comment ratio
+    comment_ratio = len(comment_lines) / max(1, len(lines))
+    if comment_ratio >= 0.2:  # At least 20% comments
+        comment_score += 30
+    elif comment_ratio >= 0.1:  # At least 10% comments
+        comment_score += 15
+        
+    metrics['comment_quality'] = min(100, comment_score)
+    
+    # Calculate naming convention score
+    naming_score = 0
+    total_names = len(var_names) + len(func_names)
+    if total_names > 0:
+        for name in var_names + func_names:
+            # Base score for snake_case
+            if re.match(r'^[a-z][a-z0-9_]*$', name):
+                naming_score += 50  # Increased base score
+                
+                # Bonus for descriptive length
+                if len(name) > 2:
+                    naming_score += 15
+                if len(name) > 8:
+                    naming_score += 15
+                    
+                # Bonus for meaningful word separation
+                if '_' in name:
+                    naming_score += 20
+                        
+                # Penalty for overly short names
+                if len(name) <= 2:
+                    naming_score -= 30
+            else:
+                # Penalty for non-snake_case
+                naming_score -= 20
+                
+        # Average the score across all names
+        naming_score = naming_score / total_names
+    else:
+        naming_score = 100  # No names to check
+        
+    metrics['naming_convention'] = max(0, min(100, naming_score))
+    
+    # Calculate code structure score
+    structure_score = 100
+    if not indentation_consistent:
+        structure_score -= 30
+    if total_lines > 3:
+        # Penalize for no comments in longer code
+        if not comment_lines:
+            structure_score -= 30  # Reduced penalty
+        # Penalize for too dense code
+        if len(comment_lines) < total_lines / 15:  # Relaxed ratio
+            structure_score -= 15
+    
+    # Bonus for having docstring in functions
+    if function_has_docstring:
+        structure_score = min(100, structure_score + 20)
+        
+    metrics['code_structure'] = max(0, structure_score)
+    
+    # Calculate final scores
+    metrics['line_length'] = metrics['line_length'] / total_lines if total_lines > 0 else 100.0
+    
+    # Weight the metrics (adjusted weights)
     total_score = (
-        metrics['line_length'] * 0.4 +
-        metrics['comment_ratio'] * 0.3 +
-        metrics['naming_convention'] * 0.3
+        metrics['line_length'] * 0.15 +
+        metrics['comment_quality'] * 0.40 +  # Increased weight for comments
+        metrics['naming_convention'] * 0.25 +
+        metrics['code_structure'] * 0.20
     )
     
     return total_score

@@ -4,9 +4,66 @@ from bson.objectid import ObjectId
 from datetime import datetime, timedelta
 import requests
 import json
+import threading
+import time
 from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_email
 
 security_bp = Blueprint("security", __name__)
+
+def start_security_monitoring(app):
+    """Start background thread for security monitoring"""
+    def monitor_security():
+        with app.app_context():
+            while True:
+                try:
+                    db = get_db()
+                    # Get list of repositories to monitor
+                    repos = db.monitored_repositories.find({
+                        'active': True
+                    })
+                    
+                    for repo in repos:
+                        try:
+                            alerts = fetch_code_scanning_alerts(repo['full_name'])
+                            
+                            # Process and store alerts
+                            for alert in alerts:
+                                alert_doc = {
+                                    'repository': obfuscate_repository_name(repo['full_name']),
+                                    'alert_number': alert['number'],
+                                    'state': alert['state'],
+                                    'dismissed_reason': alert.get('dismissed_reason'),
+                                    'dismissed_at': alert.get('dismissed_at'),
+                                    'rule': alert['rule'],
+                                    'severity': alert['rule'].get('severity'),
+                                    'description': alert['rule'].get('description'),
+                                    'location': alert.get('most_recent_instance', {}).get('location'),
+                                    'commit_sha': alert.get('most_recent_instance', {}).get('commit_sha'),
+                                    'created_at': datetime.strptime(alert['created_at'], '%Y-%m-%dT%H:%M:%SZ'),
+                                    'updated_at': datetime.strptime(alert['updated_at'], '%Y-%m-%dT%H:%M:%SZ')
+                                }
+                                
+                                db.security_alerts.update_one(
+                                    {
+                                        'repository': repo['full_name'],
+                                        'alert_number': alert['number']
+                                    },
+                                    {'$set': alert_doc},
+                                    upsert=True
+                                )
+                        except Exception as e:
+                            print(f"Error processing repository {repo['full_name']}: {str(e)}")
+                            continue
+                            
+                except Exception as e:
+                    print(f"Error in security monitoring thread: {str(e)}")
+                
+                # Sleep for 15 minutes before next check
+                time.sleep(900)
+    
+    thread = threading.Thread(target=monitor_security, daemon=True)
+    thread.start()
+    return thread
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
@@ -20,6 +77,12 @@ def init_collections(db):
     db.security_alerts.create_index([('state', 1)])
     db.security_alerts.create_index([('severity', 1)])
     db.security_alerts.create_index([('repository', 1)])
+    
+    # Collection for repositories to monitor
+    if 'monitored_repositories' not in db.list_collection_names():
+        db.create_collection('monitored_repositories')
+    db.monitored_repositories.create_index([('full_name', 1)], unique=True)
+    db.monitored_repositories.create_index([('active', 1)])
 
 def fetch_code_scanning_alerts(repository, state='open'):
     """Fetch code scanning alerts from GitHub API"""

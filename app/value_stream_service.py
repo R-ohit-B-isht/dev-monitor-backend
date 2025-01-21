@@ -10,6 +10,62 @@ def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
     return client[current_app.config["MONGODB_DB"]]
 
+def calculate_cycle_time(events):
+    """Calculate cycle time from code start to review completion"""
+    if not events:
+        return 0
+        
+    # Sort events by timestamp
+    sorted_events = sorted(events, key=lambda x: x['timestamp'])
+    
+    # Find first code_started and last review_completed
+    code_start = None
+    review_end = None
+    
+    for event in sorted_events:
+        if event['eventType'] == 'code_started' and not code_start:
+            code_start = event['timestamp']
+        elif event['eventType'] == 'review_completed':
+            review_end = event['timestamp']
+            
+    # If missing either event, use first and last events
+    if not code_start and not review_end and len(sorted_events) >= 2:
+        code_start = sorted_events[0]['timestamp']
+        review_end = sorted_events[-1]['timestamp']
+    elif not code_start and review_end:
+        code_start = sorted_events[0]['timestamp']
+    elif code_start and not review_end:
+        review_end = sorted_events[-1]['timestamp']
+    elif not code_start or not review_end:
+        return 0
+        
+    cycle_time = (review_end - code_start).total_seconds() / 3600  # Convert to hours
+    return cycle_time
+
+def calculate_lead_time(events):
+    """Calculate lead time from task creation to deployment"""
+    if not events:
+        return 0
+        
+    # Sort events by timestamp
+    sorted_events = sorted(events, key=lambda x: x['timestamp'])
+    
+    # Find first task_created and first deployed
+    task_created = None
+    deployed = None
+    
+    for event in sorted_events:
+        if event['eventType'] == 'task_created' and not task_created:
+            task_created = event['timestamp']
+        elif event['eventType'] == 'deployed' and not deployed:
+            deployed = event['timestamp']
+            
+    if not task_created or not deployed:
+        return 0
+        
+    lead_time = (deployed - task_created).total_seconds() / 3600  # Convert to hours
+    return lead_time
+
 def init_collections(db):
     """Ensure required collections exist with proper indexes"""
     # Value stream events collection

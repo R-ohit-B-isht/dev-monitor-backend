@@ -2,6 +2,10 @@ from flask import Flask, current_app
 from flask_cors import CORS
 from pymongo import MongoClient
 from .websocket_service import websocket_bp, init_websocket
+from . import github_service, jira_service, linear_service
+from .devin_service import trigger_devin_session
+from .linear_service import linear_bp
+from .jira_service import jira_bp
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
@@ -88,6 +92,7 @@ def create_app(register_blueprints=True):
             from .notifications_service import notifications_bp, init_collections as init_notifications_collections
             from .sso_service import sso_bp, init_collections as init_sso_collections
             from .achievements_service import achievements_bp
+            from .organization_service import org_bp
             app.register_blueprint(webhook_bp)
             app.register_blueprint(tasks_bp)
             app.register_blueprint(relationships_bp)
@@ -107,7 +112,10 @@ def create_app(register_blueprints=True):
             app.register_blueprint(notifications_bp)
             app.register_blueprint(sso_bp)
             app.register_blueprint(achievements_bp)
+            app.register_blueprint(org_bp)
             app.register_blueprint(websocket_bp)
+            app.register_blueprint(linear_bp)
+            app.register_blueprint(jira_bp)
             
             # Initialize WebSocket
             socketio = init_websocket(app)
@@ -122,8 +130,10 @@ def create_app(register_blueprints=True):
             
             # Start background monitoring threads
             from .schedule_service import start_monitoring_thread
-            from .monitoring_service import start_performance_monitoring
+            from .security_service import start_security_monitoring
+            
+            # Initialize monitoring threads
             start_monitoring_thread(app)
-            start_performance_monitoring(app)
+            start_security_monitoring(app)
 
     return app
