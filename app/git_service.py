@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_commit_message, obfuscate_email
 import requests
@@ -19,7 +19,7 @@ def record_git_event():
     data = request.json
     
     event = {
-        'timestamp': datetime.utcnow(),
+        'timestamp': datetime.now(timezone.utc),
         'type': data['type'],  # commit, push, merge
         'sha': data['sha'],
         'taskId': ObjectId(data['taskId']) if data.get('taskId') else None,
@@ -53,7 +53,7 @@ def record_deployment():
     data = request.json
     
     deployment = {
-        'timestamp': datetime.utcnow(),
+        'timestamp': datetime.now(timezone.utc),
         'taskId': ObjectId(data['taskId']) if data.get('taskId') else None,
         'sha': data['sha'],
         'environment': data['environment'],  # dev, staging, prod
@@ -117,7 +117,7 @@ def get_repository_views(repository):
         db = get_db()
         traffic_data = response.json()
         traffic_data['repository'] = repository
-        traffic_data['timestamp'] = datetime.utcnow()
+        traffic_data['timestamp'] = datetime.now(timezone.utc)
         
         db.repository_traffic.update_one(
             {'repository': repository},
@@ -146,7 +146,7 @@ def get_repository_clones(repository):
         db = get_db()
         clone_data = response.json()
         clone_data['repository'] = repository
-        clone_data['timestamp'] = datetime.utcnow()
+        clone_data['timestamp'] = datetime.now(timezone.utc)
         
         db.repository_clones.update_one(
             {'repository': repository},
@@ -193,9 +193,9 @@ def get_traffic_stats(repository):
             
             # Store fresh data
             views['repository'] = repository
-            views['timestamp'] = datetime.utcnow()
+            views['timestamp'] = datetime.now(timezone.utc)
             clones['repository'] = repository
-            clones['timestamp'] = datetime.utcnow()
+            clones['timestamp'] = datetime.now(timezone.utc)
             
             db.repository_traffic.update_one(
                 {'repository': repository},

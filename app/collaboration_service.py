@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_email
 
@@ -42,7 +42,7 @@ def get_activity_feed():
             query['eventType'] = event_type
             
         # Add date filter
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
         query['timestamp'] = {'$gte': start_date}
         
         # Fetch activity feed
@@ -75,7 +75,7 @@ def record_activity():
             'engineerId': hash_engineer_id(data['engineerId']),
             'eventType': data['eventType'],
             'repository': obfuscate_repository_name(data['repository']),
-            'timestamp': datetime.utcnow(),
+            'timestamp': datetime.now(timezone.utc),
             'metadata': data.get('metadata', {}),
             'title': data.get('title'),
             'description': data.get('description'),
@@ -106,7 +106,7 @@ def get_collaboration_stats():
             match_query['repository'] = repository
             
         # Add date filter
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
         match_query['timestamp'] = {'$gte': start_date}
         
         # Aggregate statistics
