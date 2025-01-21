@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 
 relationships_bp = Blueprint("relationships", __name__)
@@ -48,7 +48,7 @@ def create_relationship():
     print(f"Parsed JSON data: {data}")
     
     # Add required timestamps as datetime objects for MongoDB
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     data["createdAt"] = now
     data["updatedAt"] = now
     
@@ -221,7 +221,7 @@ def update_relationship(relationship_id):
     
     try:
         # Add updated timestamp
-        data["updatedAt"] = datetime.utcnow()
+        data["updatedAt"] = datetime.now(timezone.utc)
         
         # Get existing relationship to check for circular dependencies
         existing = db.relationships.find_one({"_id": ObjectId(relationship_id)})

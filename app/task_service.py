@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from pymongo import MongoClient
 from bson.objectid import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 from .utils.anonymization import hash_engineer_id, obfuscate_repository_name
 import re
 
@@ -80,8 +80,8 @@ def create_task():
     data = request.json
     
     # Add required timestamps
-    data["createdAt"] = datetime.utcnow()
-    data["updatedAt"] = datetime.utcnow()
+    data["createdAt"] = datetime.now(timezone.utc)
+    data["updatedAt"] = datetime.now(timezone.utc)
     
     # Validate required fields
     required_fields = ["title", "status", "integration"]
@@ -134,7 +134,7 @@ def update_task(task_id):
         return jsonify({"error": "Task not found"}), 404
         
     # Add updated timestamp
-    updates["updatedAt"] = datetime.utcnow()
+    updates["updatedAt"] = datetime.now(timezone.utc)
     
     # If updating status to Done, check if this task is blocked by any tasks
     if updates.get("status") == "Done":
@@ -190,7 +190,7 @@ def update_task(task_id):
                     "engineerId": hash_engineer_id(engineer_id),
                     "taskId": ObjectId(task_id),
                     "eventType": event_type,
-                    "timestamp": datetime.utcnow(),
+                    "timestamp": datetime.now(timezone.utc),
                     "metadata": {
                         "previousStatus": current_task.get("status"),
                         "newStatus": updates["status"]

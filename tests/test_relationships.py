@@ -1,6 +1,6 @@
 import pytest
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timezone
 from app.relationship_service import create_relationship, get_relationships, delete_relationship
 from app.task_service import update_task
 
@@ -10,22 +10,22 @@ def test_circular_dependency_detection(client, db):
         "title": "Task 1",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
     task2 = db.tasks.insert_one({
         "title": "Task 2",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
     task3 = db.tasks.insert_one({
         "title": "Task 3",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
 
     # Create a chain of blocking relationships
@@ -58,15 +58,15 @@ def test_blocked_task_status_validation(client, db):
         "title": "Blocking Task",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
     blocked_task = db.tasks.insert_one({
         "title": "Blocked Task",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
 
     # Create blocking relationship
@@ -102,15 +102,15 @@ def test_relationship_types(client, db):
         "title": "Task 1",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
     task2 = db.tasks.insert_one({
         "title": "Task 2",
         "status": "To-Do",
         "integration": "github",
-        "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "createdAt": datetime.now(timezone.utc),
+        "updatedAt": datetime.now(timezone.utc)
     })
 
     # Test all valid relationship types
