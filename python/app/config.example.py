@@ -1,41 +1,43 @@
-"""
-Configuration template for the application.
-Copy this file to config.py and set the required environment variables.
-DO NOT commit config.py to version control.
-"""
-
 import os
 
 class Config:
-    # Database Configuration
-    MONGODB_URI = os.environ.get('MONGODB_URI')  # Required: MongoDB connection string
-    MONGODB_DB = os.environ.get('MONGODB_DB')    # Required: Database name
+    # MongoDB Configuration
+    MONGODB_URI = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017')
+    MONGODB_DB = os.environ.get('MONGODB_DB', 'devin_tasks')
     
-    # Security Configuration
-    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')  # Required: GitHub API token with repo scope
-    SECRET_KEY = os.environ.get('SECRET_KEY')      # Required: Random string for session encryption
+    # Security
+    GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+    SECRET_KEY = os.environ.get('SECRET_KEY')
     
     # Okta SSO Configuration
-    OKTA_CLIENT_ID = os.environ.get('OKTA_CLIENT_ID')         # Required: Okta OAuth client ID
-    OKTA_CLIENT_SECRET = os.environ.get('OKTA_CLIENT_SECRET') # Required: Okta OAuth client secret
-    OKTA_ORG_URL = os.environ.get('OKTA_ORG_URL')            # Required: Okta organization URL
-    OKTA_REDIRECT_URI = os.environ.get('OKTA_REDIRECT_URI')   # Required: OAuth callback URL
+    OKTA_CLIENT_ID = os.environ.get('OKTA_CLIENT_ID')
+    OKTA_CLIENT_SECRET = os.environ.get('OKTA_CLIENT_SECRET')
+    OKTA_ORG_URL = os.environ.get('OKTA_ORG_URL')
+    OKTA_REDIRECT_URI = os.environ.get('OKTA_REDIRECT_URI', 'http://localhost:5000/sso/callback/okta')
     
     # Azure AD SSO Configuration
-    AZURE_CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')         # Required: Azure AD client ID
-    AZURE_CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET') # Required: Azure AD client secret
-    AZURE_TENANT_ID = os.environ.get('AZURE_TENANT_ID')        # Required: Azure AD tenant ID
-    AZURE_REDIRECT_URI = os.environ.get('AZURE_REDIRECT_URI')   # Required: OAuth callback URL
+    AZURE_CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
+    AZURE_CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
+    AZURE_TENANT_ID = os.environ.get('AZURE_TENANT_ID')
+    AZURE_REDIRECT_URI = os.environ.get('AZURE_REDIRECT_URI', 'http://localhost:5000/sso/callback/azure')
     
-    @classmethod
-    def validate(cls):
-        """Validate required configuration is present"""
-        required = [
-            'MONGODB_URI',
-            'MONGODB_DB',
-            'GITHUB_TOKEN',
-            'SECRET_KEY'
-        ]
-        missing = [key for key in required if not getattr(cls, key)]
-        if missing:
-            raise ValueError(f"Missing required configuration: {', '.join(missing)}")
+    # Email Configuration
+    SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+    SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+    SMTP_USERNAME = os.environ.get('SMTP_USERNAME')
+    SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
+    
+    # Slack Configuration
+    SLACK_BOT_TOKEN = os.environ.get('SLACK_BOT_TOKEN')
+    SLACK_SIGNING_SECRET = os.environ.get('SLACK_SIGNING_SECRET')
+    
+    # Development Settings
+    DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+    TESTING = os.environ.get('TESTING', 'False').lower() == 'true'
+    
+    # CORS Settings
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
+    
+    # WebSocket Settings
+    WS_PING_INTERVAL = int(os.environ.get('WS_PING_INTERVAL', '25'))
+    WS_PING_TIMEOUT = int(os.environ.get('WS_PING_TIMEOUT', '120'))

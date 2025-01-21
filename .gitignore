@@ -1,3 +1,74 @@
-.env
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
-app/__pycache__/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-*
+.DS_Store
+
+# Config files with sensitive data
+**/config.py
+!**/config.example.py
+**/secrets/
+**/.credentials/
+**/.tokens/
+**/.keys/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build
+/build
+/dist
+/.next
+/.nuxt
+
+# Testing
+/coverage
+.pytest_cache/
+.nyc_output/
+junit.xml
+
+# Logs
+logs/
+*.log
+
+# Cache directories
+.cache/
+.temp/
+.tmp/
