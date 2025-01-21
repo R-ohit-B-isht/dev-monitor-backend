@@ -2,11 +2,9 @@ from hashlib import sha256
 import base64
 import re
 
-def hash_engineer_id(engineer_id: str | None) -> str:
+def hash_engineer_id(engineer_id: str) -> str:
     """Hash engineer ID using SHA-256"""
-    if not engineer_id:
-        return "anonymous"
-    return sha256(str(engineer_id).encode('utf-8')).hexdigest()
+    return sha256(engineer_id.encode('utf-8')).hexdigest()
 
 def obfuscate_email(email: str) -> str:
     """Obfuscate email address while preserving domain"""

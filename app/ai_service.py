@@ -102,34 +102,16 @@ def analyze_code_readability(code_diff):
     # Calculate comment quality score
     comment_score = 0
     meaningful_comments = 0
-    function_has_docstring = False
-    
     for comment in comment_lines:
         # Remove comment markers
         text = comment.lstrip('#').lstrip('"').lstrip("'").strip()
-        
-        # Check for function docstring
-        if any(line.strip().startswith('def ') for line in lines):
-            if '"""' in comment or "'''" in comment:
-                function_has_docstring = True
-                comment_score += 30  # Bonus for having docstring
-        
-        # Check if comment is meaningful
+        # Check if comment is meaningful (more than just a variable name)
         if len(text.split()) > 2 and not text.startswith('TODO'):
             meaningful_comments += 1
             # Bonus for descriptive comments
             if len(text) > 20:
-                comment_score += 25
-            elif len(text) > 10:
-                comment_score += 15
-                
-    # Bonus for good comment ratio
-    comment_ratio = len(comment_lines) / max(1, len(lines))
-    if comment_ratio >= 0.2:  # At least 20% comments
-        comment_score += 30
-    elif comment_ratio >= 0.1:  # At least 10% comments
-        comment_score += 15
-        
+                comment_score += 20
+    comment_score += (meaningful_comments / max(1, len(lines))) * 100
     metrics['comment_quality'] = min(100, comment_score)
     
     # Calculate naming convention score
@@ -139,17 +121,20 @@ def analyze_code_readability(code_diff):
         for name in var_names + func_names:
             # Base score for snake_case
             if re.match(r'^[a-z][a-z0-9_]*$', name):
-                naming_score += 50  # Increased base score
+                naming_score += 40
                 
                 # Bonus for descriptive length
                 if len(name) > 2:
-                    naming_score += 15
+                    naming_score += 10
                 if len(name) > 8:
-                    naming_score += 15
+                    naming_score += 10
                     
                 # Bonus for meaningful word separation
                 if '_' in name:
                     naming_score += 20
+                    # Extra bonus for multiple meaningful parts
+                    if name.count('_') > 1:
+                        naming_score += 20
                         
                 # Penalty for overly short names
                 if len(name) <= 2:
@@ -172,26 +157,21 @@ def analyze_code_readability(code_diff):
     if total_lines > 3:
         # Penalize for no comments in longer code
         if not comment_lines:
-            structure_score -= 30  # Reduced penalty
+            structure_score -= 40
         # Penalize for too dense code
-        if len(comment_lines) < total_lines / 15:  # Relaxed ratio
-            structure_score -= 15
-    
-    # Bonus for having docstring in functions
-    if function_has_docstring:
-        structure_score = min(100, structure_score + 20)
-        
+        if len(comment_lines) < total_lines / 10:
+            structure_score -= 20
     metrics['code_structure'] = max(0, structure_score)
     
     # Calculate final scores
     metrics['line_length'] = metrics['line_length'] / total_lines if total_lines > 0 else 100.0
     
-    # Weight the metrics (adjusted weights)
+    # Weight the metrics
     total_score = (
-        metrics['line_length'] * 0.15 +
-        metrics['comment_quality'] * 0.40 +  # Increased weight for comments
+        metrics['line_length'] * 0.2 +
+        metrics['comment_quality'] * 0.35 +
         metrics['naming_convention'] * 0.25 +
-        metrics['code_structure'] * 0.20
+        metrics['code_structure'] * 0.2
     )
     
     return total_score

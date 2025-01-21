@@ -2,10 +2,6 @@ from flask import Flask, current_app
 from flask_cors import CORS
 from pymongo import MongoClient
 from .websocket_service import websocket_bp, init_websocket
-from . import github_service, jira_service, linear_service
-from .devin_service import trigger_devin_session
-from .linear_service import linear_bp
-from .jira_service import jira_bp
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
@@ -28,7 +24,7 @@ def init_collections(db):
     db.git_events.create_index([('taskId', 1)])
     db.git_events.create_index([('sha', 1)])
     db.git_events.create_index([('type', 1)])
-    
+
     # Code scores collection
     if 'code_scores' not in db.list_collection_names():
         db.create_collection('code_scores')
@@ -50,7 +46,7 @@ def init_collections(db):
     db.users.create_index([('username', 1)], unique=True)
     db.users.create_index([('email', 1)], unique=True)
     db.users.create_index([('role', 1)])
-    
+
     # Achievements collection
     if 'achievements' not in db.list_collection_names():
         db.create_collection('achievements')
@@ -114,12 +110,10 @@ def create_app(register_blueprints=True):
             app.register_blueprint(achievements_bp)
             app.register_blueprint(org_bp)
             app.register_blueprint(websocket_bp)
-            app.register_blueprint(linear_bp)
-            app.register_blueprint(jira_bp)
-            
+
             # Initialize WebSocket
             socketio = init_websocket(app)
-            
+
             # Initialize collections
             db = get_db()
             init_collections(db)
@@ -127,11 +121,11 @@ def create_app(register_blueprints=True):
             init_collab_collections(db)
             init_notifications_collections(db)
             init_sso_collections(db)
-            
+
             # Start background monitoring threads
             from .schedule_service import start_monitoring_thread
             from .security_service import start_security_monitoring
-            
+
             # Initialize monitoring threads
             start_monitoring_thread(app)
             start_security_monitoring(app)

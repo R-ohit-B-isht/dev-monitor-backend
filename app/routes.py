@@ -1,15 +1,20 @@
 from flask import Blueprint, request, jsonify
-from app import jira_service, linear_service, github_service
+from app import github_service, jira_service, linear_service
 import json
 
 webhook_bp = Blueprint("webhook", __name__)
 
 @webhook_bp.route("/webhook", methods=["POST"])
 def webhook():
+    print(request.headers.get("Content-Type"))
+
+
+    # Identify the source of the webhook
+    # Check Content-Type
     if request.headers.get("Content-Type") == "application/x-www-form-urlencoded":
-        data = json.loads(request.form.get("payload", "{}"))
+        data = json.loads(request.form.get("payload", "{}"))  # Parse payload field
     else:
-        data = request.json
+        data = request.json  # Incoming webhook payload
 
     # Extract the source URL
     sender=""
@@ -24,19 +29,32 @@ def webhook():
         sender=data.get("actor",{})
         source_url = sender.get("avatarUrl","")
 
-    # Determine source
+
+    # print(data)
+    # print("-------------------------------------------------------------------------------------------------------------------------------------------------------------------")
+    # print(source_url)
+
+    # Check if it's from GitHub (you can adjust the exact check if needed)
     if "github.com" in source_url:
         source = "github"
-        response = github_service.handle_github_webhook(data)
-
     elif "linear.app" in source_url:
         source = "linear"
-        response = linear_service.handle_linear_webhook(data)
     elif "atlassian.net" in source_url:
         source = "jira"
-        response = jira_service.handle_jira_webhook(data)
     else:
-        source = "unknown"
+        source = "unknown"  # Or whatever fallback you want for unsupported sources
+
+    # Debug: Log the extracted source
+    print(f"Source: {source}")
+
+
+    if "jira" in source:
+        response = jira_service.handle_jira_webhook(data)
+    elif "linear" in source:
+        response = linear_service.handle_linear_webhook(data)
+    elif "github" in source:
+        response = github_service.handle_github_webhook(data)
+    else:
         response = {"message": "Unsupported source"}
 
     return jsonify(response), 200
