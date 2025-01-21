@@ -58,7 +58,7 @@ export function MonitoringDashboard() {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       <Breadcrumb
         items={[
           { label: 'Dashboard', href: '/' },
@@ -66,12 +66,12 @@ export function MonitoringDashboard() {
         ]}
       />
 
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Devin's Activity Monitor</h1>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">Devin's Activity Monitor</h1>
         <ReportPanel engineerId="current" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
         {/* Meeting Time */}
         <MeetingTimeCard
           engineerId="current"
@@ -91,19 +91,19 @@ export function MonitoringDashboard() {
 
         {/* Productivity Score */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
             <CardTitle className="text-sm font-medium">
               Productivity Score
             </CardTitle>
             <Brain className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 pt-2">
             <div className="space-y-2">
               <Progress
                 value={metrics?.productivityScore || 0}
-                className="h-2"
+                className="h-2.5"
               />
-              <p className="text-2xl font-bold">
+              <p className="text-xl sm:text-2xl font-bold">
                 {Math.round(metrics?.productivityScore || 0)}%
               </p>
             </div>
@@ -112,19 +112,19 @@ export function MonitoringDashboard() {
 
         {/* Focus Time */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
             <CardTitle className="text-sm font-medium">
               Focus Time
             </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 pt-2">
             <div className="space-y-2">
               <Progress
                 value={metrics?.focusTimePercentage || 0}
-                className="h-2"
+                className="h-2.5"
               />
-              <p className="text-2xl font-bold">
+              <p className="text-xl sm:text-2xl font-bold">
                 {formatDuration(metrics?.focusTimeSeconds || 0)}
               </p>
             </div>
@@ -133,19 +133,19 @@ export function MonitoringDashboard() {
 
         {/* Activity Count */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between p-3 sm:p-4 pb-2">
             <CardTitle className="text-sm font-medium">
               Activities
             </CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 sm:p-4 pt-2">
             <div className="space-y-2">
               <Progress
                 value={(metrics?.focusActivityRatio || 0) * 100}
-                className="h-2"
+                className="h-2.5"
               />
-              <p className="text-2xl font-bold">
+              <p className="text-xl sm:text-2xl font-bold">
                 {metrics?.focusActivities || 0}/{metrics?.totalActivities || 0}
               </p>
             </div>
@@ -154,22 +154,22 @@ export function MonitoringDashboard() {
       </div>
 
       {/* Recent Achievements */}
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Recent Achievements</CardTitle>
+      <Card className="mb-6 sm:mb-8">
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-lg sm:text-xl">Recent Achievements</CardTitle>
           <CardDescription>
             Badges and milestones earned during work sessions
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6 pt-0">
           <div className="space-y-4">
             {achievements.slice(0, 5).map((achievement, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-4 border rounded-lg"
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border rounded-lg"
               >
                 <div className="flex items-center gap-4">
-                  <Award className="h-5 w-5 text-yellow-500" />
+                  <Award className="h-5 w-5 text-yellow-500 flex-shrink-0" />
                   <div>
                     <p className="font-medium">{achievement.badge}</p>
                     <p className="text-sm text-gray-500">
@@ -177,7 +177,7 @@ export function MonitoringDashboard() {
                     </p>
                   </div>
                 </div>
-                <Badge variant="secondary">
+                <Badge variant="secondary" className="whitespace-nowrap">
                   Score: {Math.round(achievement.metadata.productivityScore)}%
                 </Badge>
               </div>

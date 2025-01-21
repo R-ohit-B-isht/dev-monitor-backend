@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { api } from '../services/api';
+import { api, DisplaySettings } from '../services/api';
 import { Loader2, Sun, Moon } from 'lucide-react';
 
 interface DisplayPanelProps {
@@ -18,12 +18,31 @@ interface DisplayPanelProps {
 }
 
 export function DisplayPanel({ engineerId = 'current' }: DisplayPanelProps) {
-  const [display, setDisplay] = useState({
-    theme: 'light',
-    compactView: false,
-    showAchievements: true,
-    defaultView: 'board'
+  const [display, setDisplay] = useState<DisplaySettings>(() => {
+    // Get initial theme from localStorage or default to light
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    // Apply theme class immediately on mount
+    if (savedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    return {
+      theme: savedTheme as 'light' | 'dark',
+      compactView: false,
+      showAchievements: true,
+      defaultView: 'board' as const
+    };
   });
+
+  // Effect to handle theme changes
+  useEffect(() => {
+    if (display.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [display.theme]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +73,14 @@ export function DisplayPanel({ engineerId = 'current' }: DisplayPanelProps) {
 
     try {
       await api.updateDisplay(engineerId, display);
+      // Save theme preference to localStorage
+      localStorage.setItem('theme', display.theme);
+      // Apply theme class
+      if (display.theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -89,7 +116,7 @@ export function DisplayPanel({ engineerId = 'current' }: DisplayPanelProps) {
               <label className="text-sm font-medium">Theme</label>
               <Select
                 value={display.theme}
-                onValueChange={(value) => setDisplay(prev => ({ ...prev, theme: value }))}
+                onValueChange={(value: 'light' | 'dark') => setDisplay(prev => ({ ...prev, theme: value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select theme" />
@@ -115,7 +142,7 @@ export function DisplayPanel({ engineerId = 'current' }: DisplayPanelProps) {
               <label className="text-sm font-medium">Default View</label>
               <Select
                 value={display.defaultView}
-                onValueChange={(value) => setDisplay(prev => ({ ...prev, defaultView: value }))}
+                onValueChange={(value: 'board' | 'list' | 'table') => setDisplay(prev => ({ ...prev, defaultView: value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select default view" />

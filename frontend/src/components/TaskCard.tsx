@@ -42,43 +42,43 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         "hover:shadow-lg hover:translate-y-[-2px]",
         "active:translate-y-[1px]",
         "transition-all duration-300 ease-in-out",
-        "border border-gray-100/50",
-        "bg-white/50 backdrop-blur-sm",
+        "border border-border/50",
+        "bg-card/50 backdrop-blur-sm",
         getPriorityStyle()
       )}
       onClick={onClick}
     >
-      <CardHeader className="p-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium line-clamp-1">{task.title}</CardTitle>
-          <div className="flex items-center space-x-2">
-            <span className="text-xs text-gray-500">
+      <CardHeader className="p-3 sm:p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <CardTitle className="text-sm font-medium line-clamp-1 flex-grow">{task.title}</CardTitle>
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="hidden sm:inline">
               {new Date(task.createdAt).toLocaleDateString()}
             </span>
             {integrationIcons[task.integration]}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-4 pt-0">
+      <CardContent className="p-3 sm:p-4 pt-0">
         <p className="text-sm text-gray-500 line-clamp-2 mb-3">{task.description}</p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge 
               variant="secondary"
               className={cn(
-                "transition-colors",
+                "transition-colors whitespace-nowrap",
                 statusStyles[task.status]
               )}
             >
               {task.status}
             </Badge>
             {task.priority && (
-              <Badge variant="outline">
+              <Badge variant="outline" className="whitespace-nowrap">
                 Priority: {task.priority}
               </Badge>
             )}
           </div>
-          <div className="flex items-center text-gray-500 text-xs">
+          <div className="flex items-center text-gray-500 text-xs whitespace-nowrap">
             <Clock className="h-3 w-3 mr-1" />
             {new Date(task.updatedAt).toLocaleDateString()}
           </div>

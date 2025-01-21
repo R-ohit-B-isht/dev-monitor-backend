@@ -61,7 +61,7 @@ export function TableView({ tasks, onTaskClick }: TableViewProps) {
     <Button
       variant="ghost"
       onClick={() => handleSort(field)}
-      className="hover:bg-muted/50 h-8 px-2"
+      className="hover:bg-muted/50 h-8 px-2 w-full justify-start text-left font-medium sm:w-auto"
     >
       {label}
       <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -70,55 +70,66 @@ export function TableView({ tasks, onTaskClick }: TableViewProps) {
 
   return (
     <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{renderSortButton('title', 'Title')}</TableHead>
-            <TableHead>{renderSortButton('status', 'Status')}</TableHead>
-            <TableHead>{renderSortButton('priority', 'Priority')}</TableHead>
-            <TableHead>{renderSortButton('integration', 'Integration')}</TableHead>
-            <TableHead>Created</TableHead>
-            <TableHead>{renderSortButton('updatedAt', 'Updated')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedTasks.map((task) => (
-            <TableRow
-              key={task._id}
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => onTaskClick(task)}
-            >
-              <TableCell className="font-medium">{task.title}</TableCell>
-              <TableCell>
-                <Badge 
-                  variant="secondary"
-                  className={cn(
-                    "transition-colors",
-                    statusStyles[task.status]
-                  )}
-                >
-                  {task.status}
-                </Badge>
-              </TableCell>
-              <TableCell>
-                {task.priority && (
-                  <Badge variant="outline">
-                    {task.priority}
-                  </Badge>
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center">
-                  {integrationIcons[task.integration]}
-                  <span className="ml-2">{task.integration}</span>
-                </div>
-              </TableCell>
-              <TableCell>{new Date(task.createdAt).toLocaleDateString()}</TableCell>
-              <TableCell>{new Date(task.updatedAt).toLocaleDateString()}</TableCell>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-[200px]">{renderSortButton('title', 'Title')}</TableHead>
+              <TableHead className="min-w-[100px]">{renderSortButton('status', 'Status')}</TableHead>
+              <TableHead className="hidden sm:table-cell">{renderSortButton('priority', 'Priority')}</TableHead>
+              <TableHead className="hidden md:table-cell">{renderSortButton('integration', 'Integration')}</TableHead>
+              <TableHead className="hidden lg:table-cell">Created</TableHead>
+              <TableHead className="min-w-[100px]">{renderSortButton('updatedAt', 'Updated')}</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {sortedTasks.map((task) => (
+              <TableRow
+                key={task._id}
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => onTaskClick(task)}
+              >
+                <TableCell className="font-medium min-w-[200px] truncate">
+                  <div className="flex items-center gap-2 md:hidden">
+                    {integrationIcons[task.integration]}
+                  </div>
+                  {task.title}
+                </TableCell>
+                <TableCell className="min-w-[100px]">
+                  <Badge 
+                    variant="secondary"
+                    className={cn(
+                      "transition-colors whitespace-nowrap",
+                      statusStyles[task.status]
+                    )}
+                  >
+                    {task.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="hidden sm:table-cell">
+                  {task.priority && (
+                    <Badge variant="outline" className="whitespace-nowrap">
+                      {task.priority}
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex items-center">
+                    {integrationIcons[task.integration]}
+                    <span className="ml-2">{task.integration}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="hidden lg:table-cell whitespace-nowrap">
+                  {new Date(task.createdAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell className="min-w-[100px] whitespace-nowrap">
+                  {new Date(task.updatedAt).toLocaleDateString()}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

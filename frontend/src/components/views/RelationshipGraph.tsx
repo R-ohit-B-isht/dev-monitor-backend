@@ -42,8 +42,8 @@ export function RelationshipGraph({ tasks, relationships, onTaskClick }: Relatio
 
   // Convert relationships to edges
   const edges: Edge[] = useMemo(() => {
-    return relationships.map((rel) => ({
-      id: rel._id,
+    return relationships.map((rel): Edge => ({
+      id: rel._id!,
       source: rel.sourceTaskId,
       target: rel.targetTaskId,
       label: rel.type,

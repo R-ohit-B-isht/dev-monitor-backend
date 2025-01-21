@@ -69,6 +69,49 @@ export function ValueStreamAnalysisPage() {
         <h1 className="text-xl sm:text-2xl font-bold">Value Stream Analysis</h1>
       </div>
 
+      {/* Task Status Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-6">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics?.totalTasks || 0}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {metrics?.inProgressTasks || 0}
+            </div>
+            <Progress
+              value={((metrics?.inProgressTasks || 0) / (metrics?.totalTasks || 1)) * 100}
+              className="mt-2"
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {metrics?.doneTasks || 0}
+            </div>
+            <Progress
+              value={((metrics?.doneTasks || 0) / (metrics?.totalTasks || 1)) * 100}
+              className="mt-2"
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Value Stream Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
         {/* Idea to Code */}
         <Card>

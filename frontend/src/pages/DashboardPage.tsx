@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Progress } from '../components/ui/progress';
 import { api } from '../services/api';
+import { DateRangeFilter } from '../components/DateRangeFilter';
 import { ContributionChart } from '../components/ContributionChart';
 import { TrafficChart } from '../components/TrafficChart';
 import { getTrafficStats, TrafficData } from '../services/api';
@@ -14,13 +15,19 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [trafficLoading, setTrafficLoading] = useState(true);
   const [trafficError, setTrafficError] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date;
+  });
+  const [endDate, setEndDate] = useState(() => new Date());
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const [metricsData, contributionsData] = await Promise.all([
-          api.getMonitoringMetrics(),
-          api.getContributions('current')
+          api.getMonitoringMetrics(startDate, endDate),
+          api.getContributions('current', startDate, endDate)
         ]);
         setMetrics(metricsData);
         setContributions(contributionsData);
@@ -47,7 +54,7 @@ export function DashboardPage() {
 
     fetchData();
     fetchTrafficData();
-  }, []);
+  }, [startDate, endDate]);
 
   if (loading) {
     return (
@@ -60,7 +67,15 @@ export function DashboardPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Dashboard</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold">Dashboard</h1>
+        <DateRangeFilter
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+        />
+      </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Focus Time Card */}
