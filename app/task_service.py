@@ -15,21 +15,21 @@ def get_db():
 def get_tasks():
     db = get_db()
     filters = {}
-    
+
     # Add filter support for status, integration, priority, search, and meeting tasks
     status = request.args.get("status")
     integration = request.args.get("integration")
     priority = request.args.get("priority")
     search = request.args.get("search")
     exclude_meetings = request.args.get("excludeMeetings") == "true"
-    
+
     if status:
         filters["status"] = status
     if integration:
         filters["integration"] = integration
     if priority:
         filters["priority"] = priority
-    
+
     # Build search query
     search_conditions = []
     if search:
@@ -37,7 +37,7 @@ def get_tasks():
             {"title": {"$regex": search, "$options": "i"}},
             {"description": {"$regex": search, "$options": "i"}}
         ])
-    
+
     # Add meeting filter
     if exclude_meetings:
         meeting_keywords = ["meeting", "zoom", "call", "sync", "standup", "review"]
@@ -49,17 +49,17 @@ def get_tasks():
                 {"description": {"$regex": meeting_pattern, "$options": "i"}}
             ]
         })
-    
+
     # Combine search conditions if they exist
     if search_conditions:
         filters["$or"] = search_conditions
-        
+
     tasks = list(db.tasks.find(filters))
-    
+
     # Convert ObjectId to string for JSON serialization
     for task in tasks:
         task["_id"] = str(task["_id"])
-        
+
     return jsonify(tasks), 200
 
 @tasks_bp.route("/tasks/<task_id>", methods=["GET"])
@@ -78,18 +78,18 @@ def get_task(task_id):
 def create_task():
     db = get_db()
     data = request.json
-    
+
     # Add required timestamps
     data["createdAt"] = datetime.utcnow()
     data["updatedAt"] = datetime.utcnow()
-    
+
     # Validate required fields
     required_fields = ["title", "status", "integration"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
-        
+
     # Handle meeting-specific fields
-    if any(keyword in data.get("title", "").lower() or keyword in data.get("description", "").lower() 
+    if any(keyword in data.get("title", "").lower() or keyword in data.get("description", "").lower()
            for keyword in ["meeting", "zoom", "call", "sync", "standup", "review"]):
         # Add meeting metadata
         data["isMeeting"] = True
@@ -103,46 +103,131 @@ def create_task():
             "participants": data.get("participants", []),
             "platform": data.get("platform", "unknown")  # zoom, teams, meet, etc.
         }
-    
+
     # Anonymize sensitive data
     if "engineerId" in data:
         data["engineerId"] = hash_engineer_id(data["engineerId"])
     if "repository" in data:
         data["repository"] = obfuscate_repository_name(data["repository"])
-    
+
     # Generate branch name from title
     if "branch" not in data:
         # Convert title to kebab case and clean special characters
         branch = re.sub(r'[^a-zA-Z0-9\s-]', '', data["title"].lower())
         branch = re.sub(r'\s+', '-', branch)
         data["branch"] = f"task/{branch}"
-        
+
     result = db.tasks.insert_one(data)
     return jsonify({
         "_id": str(result.inserted_id),
         "branch": data["branch"]
     }), 201
 
+@tasks_bp.route("/tasks/create", methods=["POST"])
+def create_task_alias():
+    """Alias route for task creation to maintain compatibility"""
+    return create_task()
+
+def create_task_internal_call(
+    title: str,
+    status: str,
+    integration: str,
+    description: str = None,
+    engineer_id: str = None,
+    repository: str = None,
+    start_time: str = None,
+    end_time: str = None,
+    duration: int = None,
+    is_recurring: bool = False,
+    recurrence_pattern: str = None,
+    recurrence_days: list = None,
+    participants: list = None,
+    platform: str = None,
+    branch: str = None,
+    **additional_data
+):
+    db = get_db()
+    # Initialize data dictionary with required fields
+    data = {
+        "title": title,
+        "status": status,
+        "integration": integration,
+        "createdAt": datetime.utcnow(),
+        "updatedAt": datetime.utcnow()
+    }
+
+    # Add optional description
+    if description:
+        data["description"] = description
+
+    # Add all additional data
+    data.update(additional_data)
+
+    # Check for meeting keywords in title or description
+    meeting_keywords = ["meeting", "zoom", "call", "sync", "standup", "review"]
+    is_meeting = any(
+        keyword in title.lower() or
+        (description and keyword in description.lower())
+        for keyword in meeting_keywords
+    )
+
+    if is_meeting:
+        data["isMeeting"] = True
+        data["meetingMetadata"] = {
+            "startTime": start_time,
+            "endTime": end_time,
+            "duration": duration or 0,
+            "isRecurring": is_recurring,
+            "recurrencePattern": recurrence_pattern,
+            "recurrenceDays": recurrence_days or [],
+            "participants": participants or [],
+            "platform": platform or "unknown"
+        }
+
+    # Handle sensitive data
+    if engineer_id:
+        data["engineerId"] = hash_engineer_id(engineer_id)
+
+    if repository:
+        data["repository"] = obfuscate_repository_name(repository)
+
+    # Generate branch name if not provided
+    if not branch:
+        # Convert title to kebab case and clean special characters
+        branch_name = re.sub(r'[^a-zA-Z0-9\s-]', '', title.lower())
+        branch_name = re.sub(r'\s+', '-', branch_name)
+        data["branch"] = f"task/{branch_name}"
+    else:
+        data["branch"] = branch
+
+    # Insert into database
+    result = db.tasks.insert_one(data)
+
+    return {
+        "_id": str(result.inserted_id),
+        "branch": data["branch"]
+    }, 201
+
 @tasks_bp.route("/tasks/<task_id>", methods=["PATCH"])
 def update_task(task_id):
     db = get_db()
     updates = request.json
-    
+
     try:
         # Get current task state
         current_task = db.tasks.find_one({"_id": ObjectId(task_id)})
         if not current_task:
             return jsonify({"error": "Task not found"}), 404
-            
+
         # Add updated timestamp
         updates["updatedAt"] = datetime.utcnow()
-        
+
         # Update task
         result = db.tasks.update_one(
             {"_id": ObjectId(task_id)},
             {"$set": updates}
         )
-        
+
         # Record value stream event if status changed
         if "status" in updates and updates["status"] != current_task.get("status"):
             event_type = None
@@ -152,7 +237,7 @@ def update_task(task_id):
                 event_type = "review_started"
             elif updates["status"] == "Done":
                 event_type = "code_completed"
-                
+
             if event_type:
                 value_stream_event = {
                     "engineerId": hash_engineer_id(updates.get("engineerId", current_task.get("engineerId"))),
@@ -166,7 +251,7 @@ def update_task(task_id):
                     "sessionId": updates.get("sessionId")
                 }
                 db.value_stream_events.insert_one(value_stream_event)
-        
+
         return jsonify({
             "message": "Task updated",
             "taskId": str(task_id),

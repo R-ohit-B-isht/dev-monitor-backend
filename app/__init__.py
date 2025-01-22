@@ -61,7 +61,7 @@ def create_app(register_blueprints=True):
         r"/*": {
             "origins": ["*"],  # Allow all origins in development
             "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
+            # "allow_headers": ["Content-Type", "Authorization"]
         }
     })
     app.config.from_object("app.config.Config")
