@@ -13,7 +13,7 @@ def get_daily_leaderboard():
         {
             '$match': {
                 'startTime': {'$gte': today},
-                'status': {'$in': ['stopped', 'idle']}
+                'status': 'stopped'
             }
         },
         {
@@ -39,7 +39,7 @@ def get_weekly_leaderboard():
         {
             '$match': {
                 'startTime': {'$gte': week_start},
-                'status': {'$in': ['stopped', 'idle']}
+                'status': 'stopped'
             }
         },
         {

@@ -117,17 +117,19 @@ def start_performance_monitoring(app):
     monitor_thread.start()
 
 def get_contribution_color(count):
-    """Return color intensity based on contribution count using GitHub-style thresholds"""
+    """Return color intensity (0-5) based on number of completed tasks per day"""
     if count == 0:
-        return 0  # No contributions
+        return 0  # No tasks
+    elif count <= 2:
+        return 1  # 1-2 tasks
     elif count <= 4:
-        return 1  # Light
-    elif count <= 8:
-        return 2  # Medium
-    elif count <= 12:
-        return 3  # Dark
+        return 2  # 3-4 tasks
+    elif count <= 7:
+        return 3  # 5-7 tasks
+    elif count <= 10:
+        return 4  # 8-10 tasks
     else:
-        return 4  # Very dark
+        return 5  # 11+ tasks
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
@@ -177,23 +179,71 @@ def get_focus_metrics():
     sessions = list(db.monitoring_sessions.find({
         'engineerId': hashed_id,
         'startTime': {'$gte': today},
-        'status': {'$in': ['stopped', 'idle']}
+        'status': {'$in': ['running', 'stopped']}
     }))
     
     total_focus_time = sum(s.get('focusTime', 0) for s in sessions)
-    total_time = sum((s.get('focusTime', 0) + s.get('idleTime', 0)) for s in sessions)
-    focus_percentage = (total_focus_time / total_time * 100) if total_time > 0 else 0
+    focus_percentage = 100  # AI agents are always focused
     
-    # Get activity counts
-    activities = list(db.activity_events.find({
-        'engineerId': hashed_id,
-        'timestamp': {'$gte': today}
-    }))
+    # Get activity counts and AI metrics
+    pipeline = [
+        {
+            '$match': {
+                'engineerId': hashed_id,
+                'timestamp': {'$gte': today},
+                'metadata': {'$exists': True}  # Ensure metadata exists
+            }
+        },
+        {
+            '$group': {
+                '_id': None,
+                'totalActivities': {'$sum': 1},
+                'focusActivities': {
+                    '$sum': {
+                        '$cond': [
+                            {'$in': ['$eventType', ['keyboard', 'mouse', 'ide']]},
+                            1,
+                            0
+                        ]
+                    }
+                },
+                'totalLinesModified': {
+                    '$sum': {
+                        '$ifNull': ['$metadata.linesOfCodeModified', 0]
+                    }
+                },
+                'totalFilesChanged': {
+                    '$sum': {
+                        '$ifNull': ['$metadata.filesChanged', 0]
+                    }
+                },
+                'avgTestCoverage': {
+                    '$avg': {
+                        '$ifNull': ['$metadata.testCoverage', 0]
+                    }
+                },
+                'avgResponseTime': {
+                    '$avg': {
+                        '$ifNull': ['$metadata.responseTime', 0]
+                    }
+                }
+            }
+        }
+    ]
     
-    focus_activities = len([a for a in activities if a['eventType'] in ['keyboard', 'mouse', 'ide']])
+    metrics = list(db.activity_events.aggregate(pipeline))
+    metrics_data = metrics[0] if metrics else {
+        'totalActivities': 0,
+        'focusActivities': 0,
+        'totalLinesModified': 0,
+        'totalFilesChanged': 0,
+        'avgTestCoverage': 0,
+        'avgResponseTime': 0
+    }
     
     # Calculate productivity score (60% focus time, 40% activity type)
-    productivity_score = (0.6 * focus_percentage) + (0.4 * (focus_activities / len(activities) * 100)) if activities else 0
+    focus_activity_ratio = metrics_data['focusActivities'] / metrics_data['totalActivities'] if metrics_data['totalActivities'] > 0 else 0
+    productivity_score = (0.6 * focus_percentage) + (0.4 * (focus_activity_ratio * 100))
     
     # Get new badges earned today
     new_badges = [a['badge'] for a in db.achievements.find({
@@ -212,11 +262,17 @@ def get_focus_metrics():
     return jsonify({
         'focusTimeSeconds': total_focus_time,
         'focusTimePercentage': focus_percentage,
-        'totalActivities': len(activities),
-        'focusActivities': focus_activities,
-        'focusActivityRatio': focus_activities / len(activities) if activities else 0,
+        'totalActivities': metrics_data['totalActivities'],
+        'focusActivities': metrics_data['focusActivities'],
+        'focusActivityRatio': focus_activity_ratio,
         'productivityScore': productivity_score,
-        'newBadges': new_badges
+        'newBadges': new_badges,
+        'aiMetrics': {
+            'linesOfCodeModified': metrics_data['totalLinesModified'],
+            'filesChanged': metrics_data['totalFilesChanged'],
+            'testCoverage': metrics_data['avgTestCoverage'],
+            'responseTime': metrics_data['avgResponseTime']
+        }
     }), 200
 
 @monitoring_bp.route("/monitoring/start-time", methods=["POST"])
@@ -228,8 +284,7 @@ def start_time_tracking():
         'engineerId': data['engineerId'],
         'startTime': datetime.utcnow(),
         'status': 'running',
-        'focusTime': 0,
-        'idleTime': 0
+        'focusTime': 0
     }
     
     result = db.monitoring_sessions.insert_one(session)
@@ -266,7 +321,13 @@ def record_activity():
         'sessionId': data['sessionId'],
         'timestamp': datetime.utcnow(),
         'eventType': data['eventType'],
-        'metadata': data.get('metadata', {})
+        'metadata': {
+            'linesOfCodeModified': data.get('metadata', {}).get('linesOfCodeModified', 0),
+            'filesChanged': data.get('metadata', {}).get('filesChanged', 0),
+            'testCoverage': data.get('metadata', {}).get('testCoverage', 0.0),
+            'responseTime': data.get('metadata', {}).get('responseTime', 0),
+            **data.get('metadata', {})  # Include any other metadata
+        }
     }
     
     db.activity_events.insert_one(event)
@@ -295,10 +356,6 @@ def get_contributions(engineer_id):
     end_date = datetime.utcnow().replace(hour=23, minute=59, second=59)
     start_date = (end_date - timedelta(days=364)).replace(hour=0, minute=0, second=0)
     
-    # For testing: Generate some sample contribution data with realistic patterns
-    test_data = []
-    current_date = start_date
-    
     # Pre-calculate month boundaries
     month_days = {}
     temp_date = start_date
@@ -309,37 +366,56 @@ def get_contributions(engineer_id):
             month_days[month_key] = days_in_month
         temp_date += timedelta(days=1)
     
+    # Query completed tasks within date range
+    pipeline = [
+        {
+            "$match": {
+                "status": "Done",
+                "updatedAt": {"$gte": start_date, "$lte": end_date},
+                "$or": [
+                    {"status": {"$ne": "Deleted"}},
+                    {"isDeleted": {"$ne": True}},
+                    {"isDeleted": {"$exists": False}}
+                ]
+            }
+        },
+        {
+            "$group": {
+                "_id": {
+                    "$dateToString": {
+                        "format": "%Y-%m-%d",
+                        "date": "$updatedAt"
+                    }
+                },
+                "count": {"$sum": 1}
+            }
+        },
+        {
+            "$sort": {"_id": 1}
+        }
+    ]
+    
+    task_completions = list(db.tasks.aggregate(pipeline))
+    
+    # Convert aggregation results to contribution data format
+    contribution_data = {}
+    for completion in task_completions:
+        contribution_data[completion["_id"]] = {
+            "date": completion["_id"],
+            "count": completion["count"],
+            "intensity": get_contribution_color(completion["count"])
+        }
+    
+    # Fill in dates with no contributions
+    current_date = start_date
     while current_date <= end_date:
-        # Generate contribution counts with realistic patterns
-        weekday = current_date.weekday()
-        week_of_year = current_date.isocalendar()[1]
-        
-        # Base contribution pattern
-        if weekday in [5, 6]:  # Weekends
-            base_count = 0
-        else:
-            # More contributions mid-week
-            base_count = 4 + int(6 * (1 - abs(weekday - 2) / 4))
-        
-        # Add weekly pattern variations
-        if week_of_year % 4 == 0:  # High activity weeks
-            count = base_count + 6
-        elif week_of_year % 4 == 1:  # Medium-high activity weeks
-            count = base_count + 3
-        elif week_of_year % 4 == 2:  # Medium-low activity weeks
-            count = max(0, base_count - 1)
-        else:  # Low activity weeks
-            count = max(0, base_count - 3)
-            
-        # Add some randomness
-        import random
-        count = max(0, int(count * (0.8 + random.random() * 0.4)))
-        
-        test_data.append({
-            'date': current_date.strftime("%Y-%m-%d"),
-            'count': count,
-            'intensity': get_contribution_color(count)
-        })
+        date_str = current_date.strftime("%Y-%m-%d")
+        if date_str not in contribution_data:
+            contribution_data[date_str] = {
+                "date": date_str,
+                "count": 0,
+                "intensity": 0
+            }
         current_date += timedelta(days=1)
     
     # Group by month for easier rendering
@@ -373,9 +449,10 @@ def get_contributions(engineer_id):
             }
         temp_date += timedelta(days=1)
     
-    # Fill in actual contributions
-    for contrib in test_data:
-        date = datetime.strptime(contrib['date'], "%Y-%m-%d")
+    # Fill in actual contributions from aggregated data
+    total_contributions = 0
+    for date_str, contrib in contribution_data.items():
+        date = datetime.strptime(date_str, "%Y-%m-%d")
         month_key = date.strftime("%Y-%m")
         day_index = date.day - 1  # Convert to 0-based index
         months[month_key]['contributions'][day_index] = contrib
@@ -384,81 +461,4 @@ def get_contributions(engineer_id):
     return jsonify({
         'months': list(months.values()),
         'totalContributions': total_contributions
-    }), 200
-
-@monitoring_bp.route("/monitoring/meeting-time/<engineer_id>", methods=["GET"])
-def get_meeting_time(engineer_id):
-    db = get_db()
-    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Get meeting tasks for today
-    meeting_tasks = list(db.tasks.find({
-        'engineerId': engineer_id,
-        'isMeeting': True,
-        'meetingMetadata.startTime': {'$gte': today.isoformat()}
-    }))
-    
-    # Calculate total meeting time
-    total_meeting_time = sum((task.get('meetingMetadata', {}).get('duration', 0) for task in meeting_tasks), 0)
-    
-    # Analyze meeting overlap
-    meetings_timeline = []
-    for task in meeting_tasks:
-        metadata = task.get('meetingMetadata', {})
-        if metadata.get('startTime') and metadata.get('endTime'):
-            meetings_timeline.append({
-                'id': str(task['_id']),
-                'title': task['title'],
-                'start': datetime.fromisoformat(metadata['startTime']),
-                'end': datetime.fromisoformat(metadata['endTime']),
-                'duration': metadata.get('duration', 0),
-                'isRecurring': metadata.get('isRecurring', False),
-                'recurrencePattern': metadata.get('recurrencePattern')
-            })
-    
-    # Sort meetings by start time
-    meetings_timeline.sort(key=lambda x: x['start'])
-    
-    # Calculate overlap
-    overlap_time = 0
-    for i in range(len(meetings_timeline)):
-        for j in range(i + 1, len(meetings_timeline)):
-            meeting1 = meetings_timeline[i]
-            meeting2 = meetings_timeline[j]
-            if meeting1['end'] > meeting2['start']:
-                overlap = min(meeting1['end'], meeting2['end']) - meeting2['start']
-                overlap_time += overlap.total_seconds()
-    
-    # Analyze recurring patterns
-    recurring_meetings = [m for m in meeting_tasks if m.get('meetingMetadata', {}).get('isRecurring', False)]
-    recurring_patterns = {}
-    for meeting in recurring_meetings:
-        pattern = meeting['meetingMetadata']['recurrencePattern']
-        recurring_patterns[pattern] = recurring_patterns.get(pattern, 0) + 1
-    
-    # Get idle time from monitoring sessions
-    idle_time = sum(
-        session.get('idleTime', 0)
-        for session in db.monitoring_sessions.find({
-            'engineerId': engineer_id,
-            'startTime': {'$gte': today},
-            'status': {'$in': ['stopped', 'idle']}
-        })
-    )
-    
-    # Convert datetime objects to ISO format for JSON serialization
-    for meeting in meetings_timeline:
-        meeting['start'] = meeting['start'].isoformat()
-        meeting['end'] = meeting['end'].isoformat()
-    
-    return jsonify({
-        'totalMeetingTime': total_meeting_time,
-        'meetingCount': len(meeting_tasks),
-        'idleTime': idle_time,
-        'overlapTime': overlap_time,
-        'meetings': meetings_timeline,
-        'recurringMeetings': {
-            'count': len(recurring_meetings),
-            'patterns': recurring_patterns
-        }
     }), 200

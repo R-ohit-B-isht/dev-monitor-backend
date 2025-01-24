@@ -137,7 +137,7 @@ def generate_report():
     format_type = request.args.get("format", "json")  # json, csv
     engineer_id = request.args.get("engineerId", "current")
     include_achievements = request.args.get("includeAchievements", "false") == "true"
-    include_meetings = request.args.get("includeMeetings", "false") == "true"
+    # Removed meeting parameter for AI agent
     
     try:
         start = datetime.fromisoformat(start_date) if start_date else datetime.utcnow() - timedelta(days=30)
@@ -151,7 +151,7 @@ def generate_report():
             "$match": {
                 "startTime": {"$gte": start, "$lt": end},
                 "engineerId": engineer_id,
-                "status": {"$in": ["stopped", "idle"]}
+                "status": "stopped"
             }
         }
     ]
@@ -165,7 +165,6 @@ def generate_report():
                     "engineerId": "$engineerId"
                 },
                 "totalTime": {"$sum": "$focusTime"},
-                "idleTime": {"$sum": "$idleTime"},
                 "sessionCount": {"$sum": 1},
                 "averageProductivity": {"$avg": "$productivityScore"}
             }
@@ -179,7 +178,6 @@ def generate_report():
                     "engineerId": "$engineerId"
                 },
                 "totalTime": {"$sum": "$focusTime"},
-                "idleTime": {"$sum": "$idleTime"},
                 "sessionCount": {"$sum": 1},
                 "averageProductivity": {"$avg": "$productivityScore"}
             }
@@ -193,7 +191,6 @@ def generate_report():
                     "engineerId": "$engineerId"
                 },
                 "totalTime": {"$sum": "$focusTime"},
-                "idleTime": {"$sum": "$idleTime"},
                 "sessionCount": {"$sum": 1},
                 "averageProductivity": {"$avg": "$productivityScore"}
             }
@@ -214,22 +211,7 @@ def generate_report():
             }))
             result["achievements"] = [ach["badge"] for ach in achievements]
 
-    # Add meeting data if requested
-    if include_meetings:
-        for result in results:
-            period_start = datetime.strptime(result["_id"]["date"], "%Y-%m-%d") if report_type == "daily" else start
-            period_end = period_start + timedelta(days=1) if report_type == "daily" else end
-            
-            meeting_tasks = list(db.tasks.find({
-                "engineerId": result["_id"]["engineerId"],
-                "createdAt": {"$gte": period_start, "$lt": period_end},
-                "$or": [
-                    {"title": {"$regex": "meeting|zoom|call|sync|standup|review", "$options": "i"}},
-                    {"description": {"$regex": "meeting|zoom|call|sync|standup|review", "$options": "i"}}
-                ]
-            }))
-            result["meetingCount"] = len(meeting_tasks)
-            result["meetingTime"] = sum((task.get("duration", 0) for task in meeting_tasks), 0)
+    # Removed meeting data handling for AI agent
 
     # Format response
     if format_type == "csv":
@@ -253,9 +235,8 @@ def get_report_summary():
         "timeRanges": ["daily", "weekly", "monthly"],
         "metrics": [
             {"id": "focusTime", "name": "Focus Time", "type": "duration"},
-            {"id": "idleTime", "name": "Idle Time", "type": "duration"},
             {"id": "productivityScore", "name": "Productivity Score", "type": "percentage"},
-            {"id": "meetingTime", "name": "Meeting Time", "type": "duration"},
+
             {"id": "achievements", "name": "Achievements", "type": "list"},
             {"id": "securityAlerts", "name": "Security Alerts", "type": "count"},
             {"id": "codeReviews", "name": "Code Reviews", "type": "count"},

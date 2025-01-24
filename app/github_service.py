@@ -108,6 +108,7 @@ def handle_github_webhook(data):
                 comment_response = github_client.add_comment(issue_url, comment)
 
                 if not task:
+                    print(branch)
                     create_task_internal_call(
                         title=issue.get("title", ""),
                         status="In-Progress",
@@ -115,7 +116,8 @@ def handle_github_webhook(data):
                         description=issue.get("body",""),
                         repository=data.get("repository", {}).get("full_name"),
                         platform="github",
-                        branch=branch
+                        branch=branch,
+                        devinSessionUrl=devin_response.get("url")
                     )
                 return devin_response
 

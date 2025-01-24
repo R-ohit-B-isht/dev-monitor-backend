@@ -24,7 +24,7 @@ class Config:
 
     # GitHub Configuration
     GITHUB = {
-        os.environ.get("api_token")
+        "api_token": os.environ.get("Github_Personal_Access_Token")
     }
 
     # Okta SSO Configuration

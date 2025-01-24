@@ -3,13 +3,33 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 from datetime import datetime
 from .utils.anonymization import hash_engineer_id, obfuscate_repository_name
+from typing import Optional
 import re
 
 tasks_bp = Blueprint("tasks", __name__)
 
 def get_db():
     client = MongoClient(current_app.config["MONGODB_URI"])
-    return client[current_app.config["MONGODB_DB"]]
+    db = client[current_app.config["MONGODB_DB"]]
+    
+    # Update tasks collection validator if it exists
+    if 'tasks' in db.list_collection_names():
+        db.command({
+            'collMod': 'tasks',
+            'validator': {
+                '$jsonSchema': {
+                    'bsonType': 'object',
+                    'required': ['title', 'status', 'integration'],
+                    'properties': {
+                        'status': {
+                            'enum': ['To-Do', 'In-Progress', 'Done', 'Deleted'],
+                            'description': 'must be one of the enum values and is required'
+                        }
+                    }
+                }
+            }
+        })
+    return db
 
 @tasks_bp.route("/tasks", methods=["GET"])
 def get_tasks():
@@ -21,7 +41,24 @@ def get_tasks():
     integration = request.args.get("integration")
     priority = request.args.get("priority")
     search = request.args.get("search")
-    exclude_meetings = request.args.get("excludeMeetings") == "true"
+    # Removed meeting-related filtering for AI agent
+
+    # Always exclude deleted tasks unless explicitly requested
+    show_deleted = request.args.get("showDeleted") == "true"
+    if not show_deleted:
+        filters["$and"] = filters.get("$and", [])
+        filters["$and"].append({
+            "$or": [
+                {"$and": [
+                    {"status": {"$ne": "Deleted"}},
+                    {"isDeleted": {"$ne": True}}
+                ]},
+                {"$and": [
+                    {"status": {"$ne": "Deleted"}},
+                    {"isDeleted": {"$exists": False}}
+                ]}
+            ]
+        })
 
     if status:
         filters["status"] = status
@@ -38,17 +75,7 @@ def get_tasks():
             {"description": {"$regex": search, "$options": "i"}}
         ])
 
-    # Add meeting filter
-    if exclude_meetings:
-        meeting_keywords = ["meeting", "zoom", "call", "sync", "standup", "review"]
-        meeting_pattern = "|".join(meeting_keywords)
-        filters["$and"] = filters.get("$and", [])
-        filters["$and"].append({
-            "$nor": [
-                {"title": {"$regex": meeting_pattern, "$options": "i"}},
-                {"description": {"$regex": meeting_pattern, "$options": "i"}}
-            ]
-        })
+    # Removed meeting filter for AI agent
 
     # Combine search conditions if they exist
     if search_conditions:
@@ -66,7 +93,15 @@ def get_tasks():
 def get_task(task_id):
     db = get_db()
     try:
-        task = db.tasks.find_one({"_id": ObjectId(task_id)})
+        # Check if we should show deleted tasks
+        show_deleted = request.args.get("showDeleted") == "true"
+
+        # Build query
+        query = {"_id": ObjectId(task_id)}
+        if not show_deleted:
+            query["status"] = {"$ne": "Deleted"}
+
+        task = db.tasks.find_one(query)
         if task:
             task["_id"] = str(task["_id"])
             return jsonify(task), 200
@@ -79,30 +114,17 @@ def create_task():
     db = get_db()
     data = request.json
 
-    # Add required timestamps
+    # Add required timestamps and soft delete flag
     data["createdAt"] = datetime.utcnow()
     data["updatedAt"] = datetime.utcnow()
+    data["isDeleted"] = False  # Initialize as not deleted
 
     # Validate required fields
     required_fields = ["title", "status", "integration"]
     if not all(field in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Handle meeting-specific fields
-    if any(keyword in data.get("title", "").lower() or keyword in data.get("description", "").lower()
-           for keyword in ["meeting", "zoom", "call", "sync", "standup", "review"]):
-        # Add meeting metadata
-        data["isMeeting"] = True
-        data["meetingMetadata"] = {
-            "startTime": data.get("startTime"),
-            "endTime": data.get("endTime"),
-            "duration": data.get("duration", 0),
-            "isRecurring": data.get("isRecurring", False),
-            "recurrencePattern": data.get("recurrencePattern", None),  # daily, weekly, monthly
-            "recurrenceDays": data.get("recurrenceDays", []),  # [0-6] for weekdays
-            "participants": data.get("participants", []),
-            "platform": data.get("platform", "unknown")  # zoom, teams, meet, etc.
-        }
+    # Removed meeting-specific fields for AI agent
 
     # Anonymize sensitive data
     if "engineerId" in data:
@@ -132,18 +154,19 @@ def create_task_internal_call(
     title: str,
     status: str,
     integration: str,
-    description: str = None,
-    engineer_id: str = None,
-    repository: str = None,
-    start_time: str = None,
-    end_time: str = None,
-    duration: int = None,
+    description: Optional[str] = None,
+    is_deleted: bool = False,
+    engineer_id: Optional[str] = None,
+    repository: Optional[str] = None,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    duration: Optional[int] = None,
     is_recurring: bool = False,
-    recurrence_pattern: str = None,
-    recurrence_days: list = None,
-    participants: list = None,
-    platform: str = None,
-    branch: str = None,
+    recurrence_pattern: Optional[str] = None,
+    recurrence_days: Optional[list] = None,
+    participants: Optional[list] = None,
+    platform: Optional[str] = None,
+    branch: Optional[str] = None,
     **additional_data
 ):
     db = get_db()
@@ -153,7 +176,8 @@ def create_task_internal_call(
         "status": status,
         "integration": integration,
         "createdAt": datetime.utcnow(),
-        "updatedAt": datetime.utcnow()
+        "updatedAt": datetime.utcnow(),
+        "isDeleted": is_deleted
     }
 
     # Add optional description
@@ -163,26 +187,7 @@ def create_task_internal_call(
     # Add all additional data
     data.update(additional_data)
 
-    # Check for meeting keywords in title or description
-    meeting_keywords = ["meeting", "zoom", "call", "sync", "standup", "review"]
-    is_meeting = any(
-        keyword in title.lower() or
-        (description and keyword in description.lower())
-        for keyword in meeting_keywords
-    )
-
-    if is_meeting:
-        data["isMeeting"] = True
-        data["meetingMetadata"] = {
-            "startTime": start_time,
-            "endTime": end_time,
-            "duration": duration or 0,
-            "isRecurring": is_recurring,
-            "recurrencePattern": recurrence_pattern,
-            "recurrenceDays": recurrence_days or [],
-            "participants": participants or [],
-            "platform": platform or "unknown"
-        }
+    # Removed meeting detection for AI agent
 
     # Handle sensitive data
     if engineer_id:
@@ -212,15 +217,53 @@ def create_task_internal_call(
 def update_task(task_id):
     db = get_db()
     updates = request.json
+    print(f"Received PATCH request for task {task_id}")
+    print(f"Request data: {updates}")
 
     try:
         # Get current task state
         current_task = db.tasks.find_one({"_id": ObjectId(task_id)})
         if not current_task:
+            print(f"Task {task_id} not found")
             return jsonify({"error": "Task not found"}), 404
 
-        # Add updated timestamp
-        updates["updatedAt"] = datetime.utcnow()
+        # Handle soft delete
+        if updates.get("delete") == True:
+            print(f"Processing soft delete for task {task_id}")
+            current_time = datetime.utcnow()
+            delete_updates = {
+                "status": "Deleted",
+                "updatedAt": current_time
+            }
+            print(f"Soft delete updates: {delete_updates}")
+
+            result = db.tasks.update_one(
+                {"_id": ObjectId(task_id)},
+                {"$set": delete_updates}
+            )
+
+            if result.modified_count == 0:
+                return jsonify({"error": "Task not found or already deleted"}), 404
+
+            try:
+                response_data = {
+                    "message": "Task deleted successfully",
+                    "taskId": str(task_id),
+                    "updatedAt": current_time.isoformat()
+                }
+                return jsonify(response_data), 200
+            except Exception as e:
+                print(f"Error serializing delete response: {str(e)}")
+                return jsonify({"error": "Failed to process delete response"}), 400
+
+        # For non-delete updates
+        current_time = datetime.utcnow()
+        if "updatedAt" not in updates:
+            updates["updatedAt"] = current_time
+
+        # Ensure status is valid if it's being updated
+        if "status" in updates and updates["status"] not in ["To-Do", "In-Progress", "Done", "Deleted"]:
+            return jsonify({"error": f"Invalid status: {updates['status']}"}), 400
 
         # Update task
         result = db.tasks.update_one(
@@ -252,10 +295,21 @@ def update_task(task_id):
                 }
                 db.value_stream_events.insert_one(value_stream_event)
 
-        return jsonify({
-            "message": "Task updated",
-            "taskId": str(task_id),
-            "updatedAt": updates["updatedAt"].isoformat()
-        }), 200
+        try:
+            # Format datetime for JSON serialization
+            updated_at = updates["updatedAt"]
+            if isinstance(updated_at, datetime):
+                updated_at = updated_at.isoformat()
+            
+            response_data = {
+                "message": "Task updated",
+                "taskId": str(task_id),
+                "updatedAt": updated_at
+            }
+            return jsonify(response_data), 200
+        except Exception as e:
+            print(f"Error serializing update response: {str(e)}")
+            return jsonify({"error": "Failed to process update response"}), 400
     except Exception as e:
+        print(f"Error in update_task: {str(e)}")
         return jsonify({"error": str(e)}), 400

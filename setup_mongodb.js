@@ -26,16 +26,12 @@ db.runCommand({
                     description: 'When the monitoring session ended'
                 },
                 status: {
-                    enum: ['running', 'stopped', 'idle'],
+                    enum: ['running', 'stopped'],
                     description: 'Current status of the monitoring session'
                 },
                 focusTime: {
                     bsonType: 'int',
                     description: 'Time spent focused on core tasks (in seconds)'
-                },
-                idleTime: {
-                    bsonType: 'int',
-                    description: 'Time spent idle (in seconds)'
                 },
                 productivityScore: {
                     bsonType: 'double',
@@ -74,12 +70,32 @@ db.runCommand({
                     description: 'When the event occurred'
                 },
                 eventType: {
-                    enum: ['keyboard', 'mouse', 'ide', 'terminal', 'meeting', 'break'],
+                    enum: ['keyboard', 'mouse', 'ide', 'terminal', 'break'],
                     description: 'Type of activity event'
                 },
                 metadata: {
                     bsonType: 'object',
-                    description: 'Additional event metadata'
+                    description: 'Additional event metadata',
+                    properties: {
+                        linesOfCodeModified: {
+                            bsonType: 'int',
+                            description: 'Number of lines modified in this event'
+                        },
+                        filesChanged: {
+                            bsonType: 'int',
+                            description: 'Number of files changed in this event'
+                        },
+                        testCoverage: {
+                            bsonType: 'double',
+                            minimum: 0,
+                            maximum: 100,
+                            description: 'Test coverage percentage for modified files'
+                        },
+                        responseTime: {
+                            bsonType: 'int',
+                            description: 'Response time in milliseconds'
+                        }
+                    }
                 }
             }
         }
@@ -160,6 +176,66 @@ db.runCommand({
     }
 });
 
+// Create settings collection
+if (!db.getCollection('settings').exists()) {
+    db.createCollection('settings');
+}
+
+// Add schema validation for settings
+db.runCommand({
+    collMod: 'settings',
+    validator: {
+        $jsonSchema: {
+            bsonType: 'object',
+            required: ['engineerId', 'notifications', 'integrations', 'display'],
+            properties: {
+                engineerId: {
+                    bsonType: 'string',
+                    description: 'ID of the engineer'
+                },
+                notifications: {
+                    bsonType: 'object',
+                    required: ['email', 'desktop', 'slack', 'scheduleAlerts', 'achievementAlerts'],
+                    properties: {
+                        email: { bsonType: 'bool' },
+                        desktop: { bsonType: 'bool' },
+                        slack: { bsonType: 'bool' },
+                        scheduleAlerts: { bsonType: 'bool' },
+                        achievementAlerts: { bsonType: 'bool' }
+                    }
+                },
+                integrations: {
+                    bsonType: 'object',
+                    required: ['github', 'jira', 'linear'],
+                    properties: {
+                        github: { bsonType: ['string', 'null'] },
+                        jira: { bsonType: ['string', 'null'] },
+                        linear: { bsonType: ['string', 'null'] }
+                    }
+                },
+                display: {
+                    bsonType: 'object',
+                    required: ['theme', 'compactView', 'showAchievements', 'defaultView'],
+                    properties: {
+                        theme: { enum: ['light', 'dark'] },
+                        compactView: { bsonType: 'bool' },
+                        showAchievements: { bsonType: 'bool' },
+                        defaultView: { enum: ['board', 'list', 'table'] }
+                    }
+                },
+                createdAt: {
+                    bsonType: 'date',
+                    description: 'When the settings were created'
+                },
+                updatedAt: {
+                    bsonType: 'date',
+                    description: 'When the settings were last updated'
+                }
+            }
+        }
+    }
+});
+
 // Create indexes
 db.monitoring_sessions.createIndex({ engineerId: 1, startTime: -1 });
 db.monitoring_sessions.createIndex({ status: 1 });
@@ -167,3 +243,4 @@ db.activity_events.createIndex({ engineerId: 1, sessionId: 1, timestamp: -1 });
 db.activity_events.createIndex({ eventType: 1 });
 db.achievements.createIndex({ engineerId: 1, badge: 1 });
 db.schedule_limits.createIndex({ engineerId: 1 });
+db.settings.createIndex({ engineerId: 1 }, { unique: true });

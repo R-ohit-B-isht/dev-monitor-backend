@@ -1,0 +1,96 @@
+nohup: ignoring input
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://172.16.2.2:5000
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+127.0.0.1 - - [22/Jan/2025 17:52:52] "[33mHEAD / HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "GET /monitoring/focus-metrics/current?start_date=2024-12-23T17:56:52.624Z&end_date=2025-01-22T17:56:52.624Z HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "[33mGET /git/traffic/stats/R-ohit-B-isht/dev-monitor-frontend HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "[33mGET /git/traffic/stats/R-ohit-B-isht/dev-monitor-frontend HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "GET /monitoring/contributions/current?start_date=2024-12-23T17:56:52.624Z&end_date=2025-01-22T17:56:52.624Z HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "GET /monitoring/contributions/current?start_date=2024-12-23T17:56:52.624Z&end_date=2025-01-22T17:56:52.624Z HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:56:52] "GET /monitoring/focus-metrics/current?start_date=2024-12-23T17:56:52.624Z&end_date=2025-01-22T17:56:52.624Z HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:57:04] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:57:04] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:57:04] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 17:57:04] "GET /tasks HTTP/1.1" 200 -
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+127.0.0.1 - - [22/Jan/2025 18:03:05] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:03:05] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:03:05] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:03:05] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:03:05] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:03:05] "GET /settings/current HTTP/1.1" 200 -
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+ * Detected change in '/home/ubuntu/attachments/00cd70b6-3e5c-4665-9a96-4cdfb51e9e49/python/app/task_service.py', reloading
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 196-692-262
+127.0.0.1 - - [22/Jan/2025 18:05:35] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:05:35] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:05:35] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:05:35] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:05:35] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:05:35] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:07:30] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:07:30] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:07:30] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:07:30] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:07:30] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:07:30] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:08:36] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:08:36] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:08:36] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:08:36] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:08:36] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:08:36] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:09:36] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:09:36] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:09:36] "GET /tasks HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:09:36] "GET /relationships HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:09:36] "GET /settings/current HTTP/1.1" 200 -
+127.0.0.1 - - [22/Jan/2025 18:09:36] "GET /relationships HTTP/1.1" 200 -

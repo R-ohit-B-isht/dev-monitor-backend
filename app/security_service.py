@@ -6,6 +6,7 @@ import requests
 import json
 import threading
 import time
+import os
 from .utils.anonymization import hash_engineer_id, obfuscate_repository_name, obfuscate_email
 
 security_bp = Blueprint("security", __name__)
@@ -87,14 +88,66 @@ def init_collections(db):
 def fetch_code_scanning_alerts(repository, state='open'):
     """Fetch code scanning alerts from GitHub API"""
     try:
+        # Get token from environment directly as fallback
+        github_token = current_app.config.get("GITHUB", {}).get("api_token") or os.environ.get("Github_Personal_Access_Token")
+        
+        if not github_token:
+            print("Error: No GitHub token found in config or environment")
+            return []
+            
         headers = {
             'Accept': 'application/vnd.github.v3+json',
-            'Authorization': f'token {current_app.config["GITHUB_TOKEN"]}'
+            'Authorization': f'Bearer {github_token}'  # GitHub API v3 uses Bearer token
         }
-        url = f'https://api.github.com/repos/{repository}/code-scanning/alerts'
-        params = {'state': state}
+        print("Debug: Checking GitHub token configuration")
+        print(f"Debug: Token found: {'Yes' if github_token else 'No'}")
+        print(f"Debug: Token prefix: {github_token[:10] if github_token else 'None'}...")
+        
+        # First verify repository access
+        repo_url = f'https://api.github.com/repos/{repository}'
+        try:
+            # Verify token is valid first
+            user_url = 'https://api.github.com/user'
+            print(f"Checking GitHub token validity at: {user_url}")
+            print(f"Full headers: {headers}")
+            user_response = requests.get(user_url, headers=headers)
+            print(f"User response status: {user_response.status_code}")
+            print(f"User response body: {user_response.text}")
+            
+            if user_response.status_code == 401:
+                print("GitHub authentication failed. Please check your token.")
+                print(f"Current token from config: {current_app.config['GITHUB']['api_token']}")
+                return []
+                
+            # Then check repository access
+            print(f"Checking repository access: {repo_url}")
+            repo_response = requests.get(repo_url, headers=headers)
+            print(f"Repository response status: {repo_response.status_code}")
+            
+            if repo_response.status_code == 404:
+                print(f"Repository {repository} not found")
+                return []
+            elif repo_response.status_code != 200:
+                print(f"Error accessing repository: {repo_response.status_code}")
+                print(f"Response body: {repo_response.text}")
+                return []
+                
+            print("Repository access successful")
+            
+            # Then try to fetch code scanning alerts
+            url = f'{repo_url}/code-scanning/alerts'
+            params = {'state': state}
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {str(e)}")
+            return []
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            return []
         
         response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 404:
+            print(f"Code scanning not enabled for repository {repository}")
+            return []
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
